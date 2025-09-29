@@ -1,24 +1,34 @@
-import Fastify from 'fastify'
-import { env } from './env'
-import examplePlugin from './plugins/example'
+import Fastify from "fastify";
+import cors from "@fastify/cors";
+import { env, loadDotEnv } from "./env";
 
-const app = Fastify({
-  logger: {
-    level: 'info',
-    transport: { target: 'pino-pretty' }
-  }
-})
+loadDotEnv();
 
-async function start() {
-  await app.register(examplePlugin)
+export async function buildServer() {
+  const app = Fastify({
+    logger: { level: env.LOG_LEVEL },
+  });
 
-  app.get('/test', async () => ({ msg: app.hello() }))
+  await app.register(cors, { origin: env.CORS_ORIGIN });
 
-  await app.listen({ port: env.PORT, host: '0.0.0.0' })
-  console.log(`Server running at http://localhost:${env.PORT}`)
+  app.get("/healthz", async () => ({ ok: true }));
+
+  app.register(async (instance) => {
+    instance.get("/v1/hello", async () => ({ message: "Stock Dashboard API v1" }));
+  });
+
+  return app;
 }
 
-start().catch((err) => {
-  console.error(err)
-  process.exit(1)
-})
+if (require.main === module) {
+  (async () => {
+    const app = await buildServer();
+    try {
+      await app.listen({ port: env.PORT, host: "0.0.0.0" });
+      app.log.info(`HTTP server listening on ${env.PORT}`);
+    } catch (err) {
+      app.log.error(err);
+      process.exit(1);
+    }
+  })();
+}
