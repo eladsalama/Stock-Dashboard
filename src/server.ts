@@ -5,6 +5,7 @@ import prismaPlugin from "./plugins/prisma";
 import rateLimit from "@fastify/rate-limit";
 import redisPlugin from "./plugins/redis";
 import quotesRoutes from "./routes/quotes";
+import historyRoutes from "./routes/history";
 
 loadDotEnv();
 
@@ -18,7 +19,8 @@ export async function buildServer() {
   await app.register(rateLimit, { global: false }); // we'll enable per-route
   await app.register(redisPlugin);
   await app.register(quotesRoutes);
-  
+  await app.register(historyRoutes);
+
   app.get("/healthz", async () => ({ ok: true }));
 
   app.register(async (instance) => {
