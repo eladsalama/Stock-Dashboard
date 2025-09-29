@@ -2,6 +2,9 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { env, loadDotEnv } from "./env";
 import prismaPlugin from "./plugins/prisma";
+import rateLimit from "@fastify/rate-limit";
+import redisPlugin from "./plugins/redis";
+import quotesRoutes from "./routes/quotes";
 
 loadDotEnv();
 
@@ -12,7 +15,10 @@ export async function buildServer() {
 
   await app.register(cors, { origin: env.CORS_ORIGIN });
   await app.register(prismaPlugin);
-
+  await app.register(rateLimit, { global: false }); // we'll enable per-route
+  await app.register(redisPlugin);
+  await app.register(quotesRoutes);
+  
   app.get("/healthz", async () => ({ ok: true }));
 
   app.register(async (instance) => {
