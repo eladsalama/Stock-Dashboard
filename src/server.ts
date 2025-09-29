@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { env, loadDotEnv } from "./env";
+import prismaPlugin from "./plugins/prisma";
 
 loadDotEnv();
 
@@ -10,11 +11,19 @@ export async function buildServer() {
   });
 
   await app.register(cors, { origin: env.CORS_ORIGIN });
+  await app.register(prismaPlugin);
 
   app.get("/healthz", async () => ({ ok: true }));
 
   app.register(async (instance) => {
     instance.get("/v1/hello", async () => ({ message: "Stock Dashboard API v1" }));
+  });
+
+  app.get("/v1/portfolios", async () => {
+    const portfolios = await app.prisma.portfolio.findMany({
+      include: { positions: true },
+    });
+    return { portfolios };
   });
 
   return app;
