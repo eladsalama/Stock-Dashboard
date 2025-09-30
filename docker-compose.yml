@@ -14,5 +14,12 @@ services:
     image: redis:7
     ports:
       - "6379:6379"
+  localstack:
+    image: localstack/localstack:3
+    environment:
+      - SERVICES=s3,sqs,ses
+      - AWS_DEFAULT_REGION=us-east-1
+    ports:
+      - "4566:4566"
 volumes:
   pgdata: {}

@@ -31,7 +31,6 @@ export function loadDotEnv() {
   if (process.env.NODE_ENV !== "production") {
     const p = path.resolve(process.cwd(), ".env");
     if (fs.existsSync(p)) {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
       require("dotenv").config({ path: p });
     }
   }

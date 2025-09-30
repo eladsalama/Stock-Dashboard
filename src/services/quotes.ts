@@ -22,7 +22,7 @@ export async function fetchYahooQuote(symbol: string): Promise<Quote> {
   if (price == null) throw new Error("No price available");
 
   // robust timestamp handling (Date | ms | seconds)
-  const t = (q as any).regularMarketTime;
+  const t = (q as unknown as { regularMarketTime?: Date | number | string }).regularMarketTime;
   let asOf: string;
   if (t instanceof Date) {
     asOf = t.toISOString();

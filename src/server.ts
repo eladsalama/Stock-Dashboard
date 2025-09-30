@@ -6,6 +6,7 @@ import rateLimit from "@fastify/rate-limit";
 import redisPlugin from "./plugins/redis";
 import quotesRoutes from "./routes/quotes";
 import historyRoutes from "./routes/history";
+import portfoliosRoutes from "./routes/portfolios";
 
 loadDotEnv();
 
@@ -20,6 +21,7 @@ export async function buildServer() {
   await app.register(redisPlugin);
   await app.register(quotesRoutes);
   await app.register(historyRoutes);
+  await app.register(portfoliosRoutes);
 
   app.get("/healthz", async () => ({ ok: true }));
 
@@ -27,12 +29,7 @@ export async function buildServer() {
     instance.get("/v1/hello", async () => ({ message: "Stock Dashboard API v1" }));
   });
 
-  app.get("/v1/portfolios", async () => {
-    const portfolios = await app.prisma.portfolio.findMany({
-      include: { positions: true },
-    });
-    return { portfolios };
-  });
+  // portfolios routes now registered in routes/portfolios.ts
 
   return app;
 }
