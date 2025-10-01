@@ -10,7 +10,7 @@ const createSchema = z.object({
 const portfoliosRoutes: FastifyPluginAsync = async (app) => {
   // List portfolios (existing in server too; keeping here for cohesion)
   app.get("/v1/portfolios", async () => {
-    const portfolios = await app.prisma.portfolio.findMany({ include: { positions: true } });
+    const portfolios = await app.prisma.portfolio.findMany({ include: { positions: true, trades: false } });
     return { portfolios };
   });
 
@@ -49,7 +49,7 @@ const portfoliosRoutes: FastifyPluginAsync = async (app) => {
   // Get by id
   app.get("/v1/portfolios/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
-    const p = await app.prisma.portfolio.findUnique({ where: { id }, include: { positions: true } });
+  const p = await app.prisma.portfolio.findUnique({ where: { id }, include: { positions: true, trades: false } });
     if (!p) return reply.code(404).send({ error: "Not found" });
     return { portfolio: p };
   });

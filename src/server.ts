@@ -8,6 +8,8 @@ import quotesRoutes from "./routes/quotes";
 import historyRoutes from "./routes/history";
 import portfoliosRoutes from "./routes/portfolios";
 import uploadsRoutes from "./routes/uploads";
+import devRoutes from "./routes/dev";
+import awsDevPlugin from "./plugins/aws-dev";
 
 loadDotEnv();
 
@@ -20,10 +22,13 @@ export async function buildServer() {
   await app.register(prismaPlugin);
   await app.register(rateLimit, { global: false }); // we'll enable per-route
   await app.register(redisPlugin);
+  // Dev-only LocalStack wiring (safe no-op in production)
+  await app.register(awsDevPlugin);
   await app.register(quotesRoutes);
   await app.register(historyRoutes);
   await app.register(portfoliosRoutes);
   await app.register(uploadsRoutes);
+  await app.register(devRoutes);
 
   app.get("/healthz", async () => ({ ok: true }));
 
