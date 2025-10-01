@@ -53,6 +53,38 @@ const portfoliosRoutes: FastifyPluginAsync = async (app) => {
     if (!p) return reply.code(404).send({ error: "Not found" });
     return { portfolio: p };
   });
+
+  // Update (partial)
+  const patchSchema = z.object({
+    name: z.string().min(1).max(100).optional(),
+    baseCcy: z.string().min(3).max(6).optional(),
+  });
+
+  app.patch("/v1/portfolios/:id", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const parse = patchSchema.safeParse(req.body);
+    if (!parse.success) {
+      return reply.code(400).send({ error: "Invalid body", details: parse.error.flatten() });
+    }
+    const data = parse.data;
+    try {
+      const updated = await app.prisma.portfolio.update({ where: { id }, data });
+      return { portfolio: updated };
+    } catch {
+      return reply.code(404).send({ error: "Not found" });
+    }
+  });
+
+  // Delete
+  app.delete("/v1/portfolios/:id", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+      await app.prisma.portfolio.delete({ where: { id } });
+      return reply.code(204).send();
+    } catch {
+      return reply.code(404).send({ error: "Not found" });
+    }
+  });
 };
 
 export default portfoliosRoutes;

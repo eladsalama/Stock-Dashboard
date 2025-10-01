@@ -7,6 +7,7 @@ import redisPlugin from "./plugins/redis";
 import quotesRoutes from "./routes/quotes";
 import historyRoutes from "./routes/history";
 import portfoliosRoutes from "./routes/portfolios";
+import uploadsRoutes from "./routes/uploads";
 
 loadDotEnv();
 
@@ -22,6 +23,7 @@ export async function buildServer() {
   await app.register(quotesRoutes);
   await app.register(historyRoutes);
   await app.register(portfoliosRoutes);
+  await app.register(uploadsRoutes);
 
   app.get("/healthz", async () => ({ ok: true }));
 
