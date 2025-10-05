@@ -33,7 +33,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const base = getBase();
   const url = `${base}${path}`;
   // Only set JSON content-type if we actually send a body and caller didn't override.
-  const headers: Record<string,string> = { ...(init.headers as any) };
+  const headers: Record<string,string> = { ...(init.headers as Record<string,string> | undefined) };
   if (init.body && !Object.keys(headers).some(h => h.toLowerCase() === 'content-type')) {
     headers['Content-Type'] = 'application/json';
   }
@@ -141,10 +141,10 @@ export const api = {
       body: JSON.stringify({ portfolioId, key })
     });
   },
-  async batchQuotes(symbols: string[]): Promise<Record<string, { price?: number; currency?: string; asOf?: string; error?: string; previousClose?: number; change?: number; changePercent?: number; longName?: string }>> {
+  async batchQuotes(symbols: string[]): Promise<Record<string, { price?: number; currency?: string; asOf?: string; error?: string; previousClose?: number; change?: number; changePercent?: number; longName?: string; cached?: boolean }>> {
     if (symbols.length === 0) return {};
     const param = symbols.join(',');
-    const data = await request<{ quotes: Record<string, any> }>(`/v1/quotes?symbols=${encodeURIComponent(param)}`);
+    const data = await request<{ quotes: Record<string, { price?: number; previousClose?: number; change?: number; changePercent?: number; asOf?: string; longName?: string; error?: string; cached?: boolean }> }>(`/v1/quotes?symbols=${encodeURIComponent(param)}`);
     return data.quotes;
   },
   async history(symbol: string, range: string) {

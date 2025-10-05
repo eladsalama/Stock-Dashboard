@@ -104,7 +104,14 @@ async function main() {
           const fallback = envelope as Partial<Msg>;
           const portfolioId = s3Msg?.portfolioId ?? fallback.portfolioId ?? "";
           const key = s3Msg?.key ?? fallback.key ?? "";
-          console.log(`[worker] message parsed portfolio=${portfolioId || 'N/A'} key='${key}' attempt=${(envelope as any)?.attempt || 0}`);
+              const currentAttempt = (() => {
+                if (envelope && typeof envelope === 'object' && 'attempt' in envelope) {
+                  const val = (envelope as { attempt?: unknown }).attempt;
+                  return typeof val === 'number' ? val : 0;
+                }
+                return 0;
+              })();
+              console.log(`[worker] message parsed portfolio=${portfolioId || 'N/A'} key='${key}' attempt=${currentAttempt}`);
           if (portfolioId && key) {
             try {
               // Heuristic: fetch just head or key path pattern to decide
@@ -123,7 +130,7 @@ async function main() {
               }
             } catch (err) {
               // Simple retry with backoff: re-enqueue with attempt count
-              const attempt = Number((envelope as Record<string, unknown>)?.attempt || 0) + 1;
+              const attempt = currentAttempt + 1;
               if (attempt >= MAX_ATTEMPTS) {
                 await sqs.send(new SendMessageCommand({ QueueUrl: DLQ_URL, MessageBody: JSON.stringify({ portfolioId, key, error: String(err) }) }));
                 console.error(`[worker] moved to DLQ after ${attempt} attempts`, { key, portfolioId, error: String(err) });

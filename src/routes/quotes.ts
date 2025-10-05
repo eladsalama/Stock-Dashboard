@@ -30,7 +30,8 @@ const quotesRoutes: FastifyPluginAsync = async (app) => {
     if (!q) return reply.code(400).send({ error: 'symbols query param required' });
     const symbols = q.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
     if (!symbols.length) return reply.code(400).send({ error: 'no symbols parsed' });
-    const results: Record<string, any> = {};
+  interface QuoteResult { price?: number; previousClose?: number; [k: string]: unknown; cached?: boolean; error?: string }
+  const results: Record<string, QuoteResult> = {};
     for (const sym of symbols) {
       try {
         const key = `quote:${sym}`;
@@ -43,7 +44,7 @@ const quotesRoutes: FastifyPluginAsync = async (app) => {
         await app.redis.set(key, JSON.stringify(quote), 'EX', TTL_SECONDS);
         results[sym] = { ...quote, cached: false };
       } catch (err) {
-        results[sym] = { error: String(err) };
+        results[sym] = { error: err instanceof Error ? err.message : String(err) };
       }
     }
     return { quotes: results };

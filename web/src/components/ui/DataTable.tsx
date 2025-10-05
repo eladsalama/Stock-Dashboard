@@ -33,9 +33,9 @@ export function DataTable<T>({ columns, rows, sort, onSortChange, rowKey, emptyM
     const col = columns.find(c => String(c.key) === sort.key);
     if (!col) return rows;
     const copy = [...rows];
-    copy.sort((a: any, b: any) => {
-      const av = a[sort.key];
-      const bv = b[sort.key];
+    copy.sort((a: T, b: T) => {
+      const av = (a as Record<string, unknown>)[sort.key];
+      const bv = (b as Record<string, unknown>)[sort.key];
       if (typeof av === 'number' && typeof bv === 'number') return sort.dir === 'asc' ? av - bv : bv - av;
       return sort.dir === 'asc' ? String(av ?? '').localeCompare(String(bv ?? '')) : String(bv ?? '').localeCompare(String(av ?? ''));
     });
@@ -62,7 +62,7 @@ export function DataTable<T>({ columns, rows, sort, onSortChange, rowKey, emptyM
           <tr key={rowKey(r)}>
             {columns.map(c => (
               <td key={String(c.key)} style={{ textAlign: c.align || 'left' }}>
-                {c.render ? c.render(r) : (r as any)[c.key] as any}
+                {c.render ? c.render(r) : (r as Record<string, unknown>)[c.key as string] as React.ReactNode}
               </td>
             ))}
           </tr>

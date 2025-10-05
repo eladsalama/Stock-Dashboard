@@ -80,13 +80,13 @@ const uploadsRoutes: FastifyPluginAsync = async (app) => {
       const runId = randomUUID();
       try {
         await req.server.prisma.$executeRawUnsafe('INSERT INTO "IngestRun" (id, "portfolioId", "objectKey", status) VALUES ($1,$2,$3,$4)', runId, portfolioId, key, 'pending');
-      } catch (e:any) {
-        req.log.error({ err:e, portfolioId, key }, 'failed to insert pending ingest run (continuing)');
+      } catch (e) {
+        req.log.error({ err: e, portfolioId, key }, 'failed to insert pending ingest run (continuing)');
       }
       await sqs.send(new SendMessageCommand({ QueueUrl: QUEUE_URL, MessageBody: JSON.stringify({ portfolioId, key }) }));
       req.log.info({ portfolioId, key, runId }, 'enqueued ingestion (positions/trades)');
       return { enqueued: true, runId };
-    } catch (err:any) {
+    } catch (err) {
       req.log.error({ err }, 'Failed to enqueue ingestion');
       return reply.code(500).send({ error:'Enqueue failed' });
     }
