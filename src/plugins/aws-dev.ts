@@ -1,5 +1,5 @@
 import fp from "fastify-plugin";
-import { S3Client, CreateBucketCommand, PutBucketNotificationConfigurationCommand } from "@aws-sdk/client-s3";
+import { S3Client, CreateBucketCommand, PutBucketNotificationConfigurationCommand, PutBucketCorsCommand } from "@aws-sdk/client-s3";
 import { SQSClient, CreateQueueCommand, GetQueueAttributesCommand, SetQueueAttributesCommand } from "@aws-sdk/client-sqs";
 
 const REGION = process.env.AWS_REGION || "us-east-1";
@@ -19,6 +19,26 @@ export default fp(async (app) => {
     try {
       // Create bucket (idempotent)
       await s3.send(new CreateBucketCommand({ Bucket: TRADES_BUCKET }));
+      // Ensure permissive CORS so browser presigned PUT from Next.js works
+      try {
+        await s3.send(new PutBucketCorsCommand({
+          Bucket: TRADES_BUCKET,
+          CORSConfiguration: {
+            CORSRules: [
+              {
+                AllowedHeaders: ['*'],
+                AllowedMethods: ['GET','PUT','HEAD','POST','DELETE'],
+                AllowedOrigins: ['*'],
+                ExposeHeaders: ['ETag'],
+                MaxAgeSeconds: 3000
+              }
+            ]
+          }
+        }));
+        app.log.info({ bucket: TRADES_BUCKET }, 'Applied S3 CORS configuration');
+      } catch (e) {
+        app.log.debug({ e }, 'failed to apply bucket CORS (may already exist)');
+      }
     } catch (e) {
       app.log.debug({ e }, "bucket may already exist");
     }

@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useState, useRef, useImperativeHandle } from 'react';
 import { api, Position } from '@lib/api';
-import Link from 'next/link';
+import SymbolLink from '@components/ui/SymbolLink';
 import { DataTable, Column } from '@components/ui/DataTable';
 
 interface Props { portfolioId: string; initial: Position[]; onMetrics?: (m: PositionsMetrics)=>void }
@@ -23,6 +23,7 @@ type Enriched = Position & {
 export interface PositionsMetrics { totalMV: number; totalPrev: number; portfolioDayChange: number; portfolioDayPct: number; totalPL: number; plPct: number; lastQuoteAt: Date | null; }
 
 const PositionsLive = React.forwardRef<PositionsLiveHandle, Props>(function PositionsLive({ portfolioId, initial, onMetrics }, ref) {
+  // router no longer used (navigation handled elsewhere)
   const [positions, setPositions] = useState<Enriched[]>(initial);
   // (quote loading state omitted; can be reintroduced if UI spinner needed)
   const [lastQuoteAt, setLastQuoteAt] = useState<Date | null>(null);
@@ -130,7 +131,7 @@ const PositionsLive = React.forwardRef<PositionsLiveHandle, Props>(function Posi
   const columns: Column<Enriched>[] = [
     { key: 'symbol', label: 'Symbol', sortable: true, render: r => (
       r._new ? <input ref={symbolInputRef} value={r.symbol} onChange={e=>updateNew('symbol', e.target.value)} style={{ width:80, padding:'2px 4px' }} placeholder='SYM' />
-      : <Link href={`/symbol/${r.symbol.toLowerCase()}`} style={{ textDecoration:'none', color:'var(--color-accent)' }}>{r.symbol}</Link>
+      : <SymbolLink symbol={r.symbol} style={{ textDecoration:'none', color:'var(--color-accent)', cursor:'pointer' }}>{r.symbol}</SymbolLink>
     ) },
     { key: 'quantity', label: 'Qty', sortable: true, render: r => r._new ? (
       <input type='number' value={r.quantity || ''} onChange={e=>updateNew('quantity', e.target.value)} style={{ width:70, padding:'2px 4px' }} />

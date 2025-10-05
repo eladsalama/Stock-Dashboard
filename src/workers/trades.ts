@@ -8,12 +8,17 @@ import { getS3 } from '../services/s3';
 // lightweight inline positions snapshot ingest to avoid path resolution issues
 async function positionsSnapshotIngest(portfolioId:string, key:string, prisma:PrismaClient, s3KeyFetcher:()=>Promise<string>) {
   const text = await s3KeyFetcher();
+  console.log('[worker][positions] fetched object', { key, bytes: text.length });
   const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
-  if(!lines.length) return { inserted:0, runId: undefined };
-  const header = lines[0].toLowerCase();
-  if(!(header.includes('symbol') && (header.includes('quantity') || header.includes('qty')) && header.includes('avgcost'))) {
-    console.warn(`[worker] positions ingest skipped (unrecognized header) portfolio=${portfolioId} key=${key}`);
-    return { inserted:0, runId: undefined };
+  console.log('[worker][positions] line count after trim/filter', { key, lines: lines.length, sample: lines.slice(0,3) });
+  if(!lines.length) { console.warn('[worker][positions] empty file', { key, portfolioId }); return { inserted:0, runId: undefined }; }
+  // Strip UTF-8 BOM if present
+  lines[0] = lines[0].replace(/^\uFEFF/, '');
+  const headerLower = lines[0].toLowerCase();
+  const looksLikeHeader = headerLower.includes('symbol') && (headerLower.includes('quantity') || headerLower.includes('qty')) && (headerLower.includes('avgcost') || headerLower.includes('avg_cost') || headerLower.includes('cost'));
+  const startIndex = looksLikeHeader ? 1 : 0;
+  if(!looksLikeHeader) {
+    console.log('[worker][positions] treating file as headerless', { key });
   }
   // Reuse existing pending run if enqueue created it, else create here.
   let runId: string | undefined;
@@ -25,15 +30,17 @@ async function positionsSnapshotIngest(portfolioId:string, key:string, prisma:Pr
   runId = randomUUID();
     await prisma.$executeRawUnsafe('INSERT INTO "IngestRun" (id, "portfolioId", "objectKey", status) VALUES ($1,$2,$3,$4)', runId, portfolioId, key, 'pending');
   }
-  let inserted=0;
+  let inserted=0; let failed=0;
   await prisma.$transaction(async (tx: TxClient)=>{
-    for(let i=1;i<lines.length;i++) {
-      const cols = lines[i].split(',');
+    for(let i=startIndex;i<lines.length;i++) {
+      const raw = lines[i];
+      if(!raw) continue;
+      const cols = raw.split(',');
       if(cols.length < 3) continue;
       const symbol = cols[0]?.trim().toUpperCase();
       const quantity = Number(cols[1]);
       const avgCost = Number(cols[2]);
-      if(!symbol || !isFinite(quantity) || !isFinite(avgCost)) continue;
+      if(!symbol || !isFinite(quantity) || !isFinite(avgCost)) { failed++; continue; }
       const existing = await tx.position.findFirst({ where:{ portfolioId, symbol } });
       if(existing) {
         await tx.position.update({ where:{ id: existing.id }, data:{ quantity, avgCost } });
@@ -44,7 +51,8 @@ async function positionsSnapshotIngest(portfolioId:string, key:string, prisma:Pr
     }
     await tx.portfolio.update({ where:{ id:portfolioId }, data:{ lastIngestAt:new Date(), lastIngestStatus:`positions:${inserted}` } });
   });
-  await prisma.$executeRawUnsafe('UPDATE "IngestRun" SET status=$1, "rowsOk"=$2, "rowsFailed"=$3, "finishedAt"=$4 WHERE id=$5','ok', inserted, 0, new Date(), runId);
+  await prisma.$executeRawUnsafe('UPDATE "IngestRun" SET status=$1, "rowsOk"=$2, "rowsFailed"=$3, "finishedAt"=$4 WHERE id=$5','ok', inserted, failed, new Date(), runId);
+  console.log('[worker][positions] ingest complete', { key, portfolioId, inserted, failed, runId });
   return { inserted, runId };
 }
 
@@ -116,7 +124,8 @@ async function main() {
           if (portfolioId && key) {
             try {
               // Heuristic: fetch just head or key path pattern to decide
-              const isPositions = key.includes('/positions/');
+              // Detect positions snapshot uploads (can start with 'positions/' or contain '/positions/')
+              const isPositions = key.includes('/positions/') || key.startsWith('positions/');
               if (isPositions) {
                 console.log(`[worker] positions snapshot ingest start portfolio=${portfolioId} key='${key}'`);
                 const s3 = getS3();

@@ -24,9 +24,12 @@ a:hover { text-decoration: underline; }
 }
 
 .app-frame { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
-.sidebar { background: var(--color-bg-elevated); border-right:1px solid var(--color-border); display:flex; flex-direction:column; }
+.sidebar { background: var(--color-bg-elevated); border-right:1px solid var(--color-border); display:flex; flex-direction:column; position:relative; z-index:5; }
+.app-frame > main { position:relative; z-index:1; }
 .sidebar-header { padding:12px 14px; font-weight:600; font-size:14px; border-bottom:1px solid var(--color-border); }
 .sidebar-section { padding:8px 10px; }
+.sidebar-preload-item { padding:6px 8px; border:1px solid var(--color-border); border-radius:6px; margin-bottom:4px; background:#0d1117; font-size:12px; font-weight:500; opacity:0.85; }
+.sidebar-preload-item.skeleton { height:auto; }
 .sidebar-nav a { display:block; padding:6px 8px; border-radius: var(--radius-sm); color: var(--color-fg-muted); text-decoration:none; font-size:12px; }
 .sidebar-nav a:hover { background: var(--color-bg-hover); color: var(--color-fg); }
 .panel { background: var(--color-bg-elevated); border:1px solid var(--color-border); border-radius: var(--radius-md); display:flex; flex-direction:column; }

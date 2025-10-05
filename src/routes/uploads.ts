@@ -29,6 +29,7 @@ const requestSchema = z.object({
   portfolioId: z.string().min(1),
   filename: z.string().min(1),
   contentType: z.string().default("text/csv"),
+  checksumCrc32: z.string().regex(/^[A-Za-z0-9+/=]{4,}$/).optional(),
 });
 
 const uploadsRoutes: FastifyPluginAsync = async (app) => {
@@ -62,18 +63,24 @@ const uploadsRoutes: FastifyPluginAsync = async (app) => {
     if (!parse.success) {
       return reply.code(400).send({ error: "Invalid body", details: parse.error.flatten() });
     }
-    const { portfolioId, filename, contentType } = parse.data;
+  const { portfolioId, filename, contentType, checksumCrc32 } = parse.data;
     const key = `positions/${portfolioId}/${Date.now()}-${filename}`;
-    const cmd = new PutObjectCommand({ Bucket: BUCKET, Key: key, ContentType: contentType });
+  const putParams: { Bucket: string; Key: string; ContentType: string; ChecksumCRC32?: string } = { Bucket: BUCKET, Key: key, ContentType: contentType };
+  if (checksumCrc32) putParams.ChecksumCRC32 = checksumCrc32;
+  const cmd = new PutObjectCommand(putParams);
     const url = await getSignedUrl(s3, cmd, { expiresIn: 60 * 5 });
-    return { bucket: BUCKET, key, url, expiresIn: 300 };
+    req.log.info({ key, urlSnippet: url.split('?')[0], bucket: BUCKET }, 'generated positions presign');
+    return { bucket: BUCKET, key, url, expiresIn: 300, method: 'PUT', headers: { 'Content-Type': contentType, ...(checksumCrc32? { 'x-amz-checksum-crc32': checksumCrc32 }: {}) } };
   });
 
   // Enqueue ingestion (trades or positions) after client finishes PUT to S3
   const enqueueSchema = z.object({ portfolioId: z.string(), key: z.string() });
   app.post('/v1/uploads/enqueue', async (req, reply) => {
     const parse = enqueueSchema.safeParse(req.body);
-    if(!parse.success) return reply.code(400).send({ error:'Invalid body', details: parse.error.flatten() });
+    if(!parse.success) {
+      req.log.warn({ body: req.body }, 'enqueue invalid body');
+      return reply.code(400).send({ error:'Invalid body', details: parse.error.flatten() });
+    }
     const { portfolioId, key } = parse.data;
     try {
       // Create a pending ingest run immediately so UI polling shows it

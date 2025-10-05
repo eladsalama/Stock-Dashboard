@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
+import SymbolLink from '@components/ui/SymbolLink';
 import { api } from '@lib/api';
 import { timeAgo } from '@lib/time';
 
@@ -9,7 +9,12 @@ interface WLQuote { price?: number; asOf?: string; error?: string }
 const STORAGE_KEY = 'watchlist.symbols.v1';
 
 export default function WatchlistClient() {
-  const [symbols, setSymbols] = useState<string[]>([]);
+  const [symbols, setSymbols] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) return JSON.parse(raw); } catch {}
+    }
+    return [];
+  });
   const [input, setInput] = useState('');
   const [quotes, setQuotes] = useState<Record<string, WLQuote>>({});
   const [loading, setLoading] = useState(false);
@@ -80,7 +85,7 @@ export default function WatchlistClient() {
             const q = quotes[sym] || {};
             return (
               <tr key={sym}>
-                <td><Link href={`/symbol/${sym.toLowerCase()}`} style={{ textDecoration:'none', color:'var(--color-accent)' }}>{sym}</Link></td>
+                <td><SymbolLink symbol={sym} className="watchlist-link" style={{ textDecoration:'none', color:'var(--color-accent)', cursor:'pointer' }}>{sym}</SymbolLink></td>
                 <td>{q.price ? q.price.toFixed(2) : (q.error ? 'Err' : '…')}</td>
                 <td style={{ fontSize:10, opacity:0.6 }}>{q.asOf ? timeAgo(q.asOf) : ''}</td>
                 <td><button onClick={() => remove(sym)} className="inline-btn" style={{ fontSize:10 }}>x</button></td>

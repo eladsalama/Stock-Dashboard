@@ -127,9 +127,9 @@ export const api = {
     });
   },
   async presignPositionsUpload(portfolioId: string, filename: string) {
-    return request<{ bucket: string; key: string; url: string; expiresIn: number }>(`/v1/uploads/positions:presign`, {
+    return request<{ bucket: string; key: string; url: string; expiresIn: number; headers?: Record<string,string> }>(`/v1/uploads/positions:presign`, {
       method: 'POST',
-      body: JSON.stringify({ portfolioId, filename, contentType: 'text/csv' })
+      body: JSON.stringify({ portfolioId, filename, contentType: 'text/csv', checksumCrc32: undefined })
     });
   },
   async enqueueIngest(portfolioId: string, key: string) {

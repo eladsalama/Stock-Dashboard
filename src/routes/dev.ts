@@ -19,6 +19,17 @@ const devRoutes: FastifyPluginAsync = async (app) => {
     const result = await ingestCsvFromS3(portfolioId, key, app.prisma);
     return { ok: true, result };
   });
+
+  // Simple diagnostic logging endpoint (development only)
+  app.post('/v1/dev/sidebar-log', async (req, reply) => {
+    try {
+      const body = req.body as unknown; // diagnostic pass-through
+      app.log.info({ sidebarDiag: true, body }, 'Sidebar diagnostic event');
+      return { ok: true };
+    } catch {
+      return reply.code(400).send({ ok:false });
+    }
+  });
 };
 
 export default devRoutes;

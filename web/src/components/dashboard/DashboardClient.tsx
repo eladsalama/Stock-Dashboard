@@ -1,5 +1,7 @@
 "use client";
 import React, { useEffect, useState, useRef } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Portfolio, Position, api } from '@lib/api';
 import { DataTable, Column } from '@components/ui/DataTable';
 import { timeAgo } from '@lib/time';
@@ -18,6 +20,7 @@ const RANGES = ['1d','1w','1m','1y','5y'] as const;
 type RangeKey = typeof RANGES[number];
 
 export default function DashboardClient({ portfolio, initialSymbol }: Props) {
+  const router = useRouter();
   const baseHoldings: HoldingRow[] = portfolio.positions.map(p => ({ id:p.id, symbol:p.symbol.toUpperCase(), quantity:Number(p.quantity), avgCost:Number(p.avgCost) }));
   const [holdings, setHoldings] = useState(baseHoldings);
   const [selected, setSelected] = useState<string>(() => {
@@ -58,6 +61,16 @@ export default function DashboardClient({ portfolio, initialSymbol }: Props) {
   // (disabled to satisfy no-unused-vars)
   // const [longName, setLongName] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+
+  // When the incoming portfolio changes (user switched portfolios in sidebar),
+  // reset holdings state, selected symbol, and clear cached candles so we don't show stale data.
+  useEffect(() => {
+    setHoldings(portfolio.positions.map(p => ({ id:p.id, symbol:p.symbol.toUpperCase(), quantity:Number(p.quantity), avgCost:Number(p.avgCost) })));
+    cacheRef.current.clear();
+    // Prefer explicitly provided initialSymbol, else first holding symbol
+    const nextSel = (initialSymbol ? initialSymbol.toUpperCase() : portfolio.positions[0]?.symbol.toUpperCase()) || '';
+    setSelected(nextSel);
+  }, [portfolio.id]);
 
   // Persist preferences
   useEffect(()=>{ if(selected) localStorage.setItem('dash.selectedSymbol', selected); },[selected]);
@@ -172,7 +185,20 @@ export default function DashboardClient({ portfolio, initialSymbol }: Props) {
   try { await api.deletePosition(id); } catch(e) { const msg = e instanceof Error ? e.message : 'Delete failed'; alert(msg); setHoldings(prev); }
   }
   const holdingColumns: Column<HoldingRow>[] = [
-    { key:'symbol', label:'Sym', sortable:true, render: h => <span onClick={()=>setSelected(h.symbol)} style={{ cursor:'pointer', fontWeight: h.symbol===selected ? 600: undefined, color: h.symbol===selected? 'var(--color-accent)': undefined }}>{h.symbol}</span> },
+    { key:'symbol', label:'Sym', sortable:true, render: h => (
+      <Link
+        href={`/symbol/${h.symbol.toLowerCase()}`}
+        style={{ cursor:'pointer', fontWeight: h.symbol===selected ? 600: undefined, color: h.symbol===selected? 'var(--color-accent)': undefined, textDecoration:'none' }}
+        onClick={(e)=> {
+          // Allow modifier clicks (new tab) to pass through
+          if(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+          // We both select locally and navigate so user gets dedicated page
+          e.preventDefault();
+          setSelected(h.symbol);
+          router.push(`/symbol/${h.symbol.toLowerCase()}`);
+        }}
+      >{h.symbol}</Link>
+    ) },
     { key:'quantity', label:'Qty', sortable:true, align:'right', render: h => editingRow===h.id ? <input autoFocus style={{ width:60 }} value={editQty} onChange={e=>setEditQty(e.target.value)} onBlur={()=>commitEdit(h.id)} /> : <span onDoubleClick={()=>{ setEditingRow(h.id); setEditQty(String(h.quantity)); setEditCost(String(h.avgCost)); }}>{h.quantity}</span> },
     { key:'avgCost', label:'Avg', sortable:true, align:'right', render: h => editingRow===h.id ? <input style={{ width:70 }} value={editCost} onChange={e=>setEditCost(e.target.value)} onBlur={()=>commitEdit(h.id)} /> : <span onDoubleClick={()=>{ setEditingRow(h.id); setEditQty(String(h.quantity)); setEditCost(String(h.avgCost)); }}>{h.avgCost.toFixed(2)}</span> },
     { key:'price', label:'Price', sortable:true, align:'right', render: h => h.price!=null ? h.price.toFixed(2) : <span className="skeleton" style={{display:'inline-block', width:34, height:10}}/> },
@@ -621,13 +647,6 @@ function AdvancedPriceChart({ data, mode, range, showSMA20, showSMA50, logScale,
         <div style={{ position:'absolute', left:`calc(${(hover!/(drawData.length-1))*100}% - 40px)`, top:8, background:'rgba(0,0,0,0.78)', padding:'6px 8px', borderRadius:4, pointerEvents:'none', border:'1px solid #30363d', whiteSpace:'nowrap', backdropFilter:'blur(2px)', fontFamily:'system-ui, ui-monospace, Menlo, monospace' }}>
           <div style={{ fontSize:11, opacity:0.7 }}>{new Date(hoverPoint.t).toLocaleString()}</div>
           <div style={{ fontWeight:600 }}>{hoverPoint.c.toFixed(2)}</div>
-          <div style={{ fontSize:11, marginTop:4, display:'flex', gap:10 }}>
-            <span>O {hoverPoint.o.toFixed(2)}</span>
-            <span>H {hoverPoint.h.toFixed(2)}</span>
-            <span>L {hoverPoint.l.toFixed(2)}</span>
-            <span>C {hoverPoint.c.toFixed(2)}</span>
-            <span>Vol {Intl.NumberFormat(undefined,{ notation:'compact' }).format(hoverPoint.v)}</span>
-          </div>
         </div>
       )}
     </div>
@@ -637,16 +656,9 @@ function AdvancedPriceChart({ data, mode, range, showSMA20, showSMA50, logScale,
 function OHLCBar({ candles }:{ candles:Array<{ t:string; o:number; h:number; l:number; c:number; v:number }> }) {
   if(!candles.length) return null;
   const last = candles[candles.length-1];
-  const items: Array<[string,string]> = [
-    ['O', last.o.toFixed(2)],
-    ['H', last.h.toFixed(2)],
-    ['L', last.l.toFixed(2)],
-    ['C', last.c.toFixed(2)],
-    ['Vol', Intl.NumberFormat(undefined,{ notation:'compact' }).format(last.v)]
-  ];
   return (
-    <div style={{ display:'flex', gap:18, fontSize:11, padding:'4px 2px', borderTop:'1px solid var(--color-border)', flexWrap:'wrap' }}>
-      {items.map(([k,v]) => <div key={k} style={{ display:'flex', gap:4 }}><span style={{ opacity:0.55 }}>{k}</span><span>{v}</span></div>)}
+    <div style={{ display:'flex', gap:10, fontSize:11, padding:'4px 2px', borderTop:'1px solid var(--color-border)' }}>
+      <div style={{ display:'flex', gap:4 }}><span style={{ opacity:0.55 }}>Price</span><span>{last.c.toFixed(2)}</span></div>
     </div>
   );
 }
