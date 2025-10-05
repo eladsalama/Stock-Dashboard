@@ -23,7 +23,6 @@ export function getBase() {
   // Explicit fallback (dev) always port 3000
   resolvedBase = 'http://localhost:3000';
   if (typeof window !== 'undefined') {
-    // eslint-disable-next-line no-console
     console.warn('[api] Using fallback API base http://localhost:3000. Set NEXT_PUBLIC_API_BASE to silence this.');
   }
   return resolvedBase;
@@ -42,7 +41,6 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!res.ok) {
     const text = await res.text();
     if (typeof window !== 'undefined') {
-      // eslint-disable-next-line no-console
       console.error('[api] request failed', { url, status: res.status, statusText: res.statusText, bodySnippet: text.slice(0, 180) });
       if (res.status === 404 && ct.includes('text/html')) {
         console.error('[api] Received HTML 404 (likely Next.js dev server). Ensure NEXT_PUBLIC_API_BASE points to Fastify backend (e.g. http://localhost:3000).');
@@ -55,10 +53,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (ct.includes('application/json')) {
     try {
       return (await res.json()) as T;
-    } catch (e) {
+    } catch {
       // Gracefully handle empty body with JSON header (rare) or parse error
       if (typeof window !== 'undefined') {
-        // eslint-disable-next-line no-console
         console.warn('[api] JSON parse failed, returning undefined', { url });
       }
       return undefined as unknown as T;

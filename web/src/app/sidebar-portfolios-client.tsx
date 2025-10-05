@@ -23,8 +23,9 @@ export default function SidebarPortfolios() {
         const list = await api.listPortfolios();
         setPortfolios(list);
         if (!selectedId && list.length) setSelectedId(list[0].id);
-      } catch (e:any) {
-        push({ type:'error', title:'Load portfolios failed', message:e.message });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Failed to load';
+        push({ type:'error', title:'Load portfolios failed', message: msg });
       }
     })();
   }, []);
@@ -56,8 +57,9 @@ export default function SidebarPortfolios() {
       setPortfolios(ps => [...ps, p]);
       setSelectedId(p.id);
       push({ type:'success', title:'Created', message:p.name });
-    } catch(e:any) {
-      push({ type:'error', title:'Create failed', message:e.message });
+    } catch(e) {
+      const msg = e instanceof Error ? e.message : 'Create failed';
+      push({ type:'error', title:'Create failed', message: msg });
     } finally { setLoading(false); cancelCreate(); }
   }
 
@@ -69,13 +71,14 @@ export default function SidebarPortfolios() {
     try {
   console.debug('[sidebar] renaming portfolio', editing.id, trimmed);
   console.debug('[sidebar] PATCH', `${window.location.origin} ->`, editing.id);
-  const updated = await api.renamePortfolio(editing.id, trimmed);
+  await api.renamePortfolio(editing.id, trimmed);
   // fully refetch to avoid stale counts later
   const fresh = await api.listPortfolios();
   setPortfolios(fresh);
       push({ type:'success', title:'Renamed', message:trimmed });
-    } catch(e:any) {
-      push({ type:'error', title:'Rename failed', message:e.message });
+    } catch(e) {
+      const msg = e instanceof Error ? e.message : 'Rename failed';
+      push({ type:'error', title:'Rename failed', message: msg });
     } finally { setEditing(null); }
   }
 
@@ -91,9 +94,10 @@ export default function SidebarPortfolios() {
   setPortfolios(fresh);
       push({ type:'success', title:'Deleted', message:p.name });
       if(selectedId === p.id) setSelectedId(null);
-    } catch(e:any) {
+    } catch(e) {
       setPortfolios(prev);
-      push({ type:'error', title:'Delete failed', message:e.message });
+      const msg = e instanceof Error ? e.message : 'Delete failed';
+      push({ type:'error', title:'Delete failed', message: msg });
     }
   }
 
@@ -106,8 +110,9 @@ export default function SidebarPortfolios() {
       a.download = `${p.name.replace(/[^a-z0-9-_]/gi,'_')}_positions.csv`;
       a.click();
       URL.revokeObjectURL(a.href);
-    } catch(e:any) {
-      push({ type:'error', title:'Export failed', message:e.message });
+    } catch(e) {
+      const msg = e instanceof Error ? e.message : 'Export failed';
+      push({ type:'error', title:'Export failed', message: msg });
     }
   }
 
@@ -144,7 +149,7 @@ export default function SidebarPortfolios() {
           finishedAt: null
         }}}));
       }
-    } catch(e:any) {
+    } catch(e) {
       console.warn('[import] worker pipeline failed, attempting direct fallback', e);
       try {
         const text = await file.text();
@@ -161,8 +166,10 @@ export default function SidebarPortfolios() {
             finishedAt: new Date().toISOString()
           }}}));
         }
-      } catch(inner:any) {
-        push({ type:'error', title:'Import failed', message: inner.message || e.message });
+      } catch(inner) {
+        const innerMsg = inner instanceof Error ? inner.message : 'Import failed';
+        const outerMsg = e instanceof Error ? e.message : '';
+        push({ type:'error', title:'Import failed', message: innerMsg || outerMsg });
       }
     } finally {
       if(fileRef.current) fileRef.current.value='';

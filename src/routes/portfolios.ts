@@ -1,4 +1,6 @@
 import { FastifyPluginAsync } from "fastify";
+import { PrismaClient } from '@prisma/client';
+type TxClient = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$extends'>;
 import { z } from "zod";
 
 const createSchema = z.object({
@@ -87,7 +89,7 @@ const portfoliosRoutes: FastifyPluginAsync = async (app) => {
     if (!exists) return reply.code(404).send({ error: "Not found" });
     const positions = await app.prisma.position.findMany({ where: { portfolioId: id } });
     // Normalize Decimal -> number for client convenience
-    const normalized = positions.map((p) => ({
+    const normalized = positions.map((p: typeof positions[number]) => ({
       ...p,
       quantity: Number(p.quantity),
       avgCost: Number(p.avgCost)
@@ -201,14 +203,14 @@ const portfoliosRoutes: FastifyPluginAsync = async (app) => {
     const runId = crypto.randomUUID();
     await app.prisma.$executeRawUnsafe('INSERT INTO "IngestRun" (id, "portfolioId", "objectKey", status) VALUES ($1,$2,$3,$4)', runId, id, `direct-upload/${Date.now()}`, 'pending');
     // Use transaction upsert
-    await app.prisma.$transaction(async (tx) => {
+  await app.prisma.$transaction(async (tx: TxClient) => {
       for (const r of out) {
-        await (tx as typeof app.prisma).position.upsert({
-          // @ts-expect-error Composite unique selector typing gap in generated Prisma client
-          where: { portfolioId_symbol: { portfolioId: id, symbol: r.symbol } },
-          update: { quantity: r.quantity, avgCost: r.avgCost },
-          create: { portfolioId: id, symbol: r.symbol, quantity: r.quantity, avgCost: r.avgCost }
-        });
+        const existing = await tx.position.findFirst({ where: { portfolioId: id, symbol: r.symbol } });
+        if (existing) {
+          await tx.position.update({ where: { id: existing.id }, data: { quantity: r.quantity, avgCost: r.avgCost } });
+        } else {
+          await tx.position.create({ data: { portfolioId: id, symbol: r.symbol, quantity: r.quantity, avgCost: r.avgCost } });
+        }
       }
       await tx.$executeRawUnsafe('UPDATE "IngestRun" SET status=$1, "rowsOk"=$2, "rowsFailed"=$3, "finishedAt"=$4 WHERE id=$5', 'ok', out.length, 0, new Date(), runId);
     });
@@ -243,7 +245,7 @@ const portfoliosRoutes: FastifyPluginAsync = async (app) => {
     const exists = await app.prisma.portfolio.findUnique({ where: { id }, select: { id: true } });
     if(!exists) return reply.code(404).send({ error: 'Not found' });
     try {
-      await app.prisma.$transaction(async (tx) => {
+  await app.prisma.$transaction(async (tx: TxClient) => {
         await tx.position.deleteMany({ where: { portfolioId: id } });
         await tx.trade.deleteMany({ where: { portfolioId: id } });
         // Delete ingests (IngestRun) by raw SQL for simplicity (delegate name may differ depending on Prisma version)

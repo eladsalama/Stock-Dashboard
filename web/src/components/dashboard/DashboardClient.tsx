@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Portfolio, Position, api } from '@lib/api';
 import { DataTable, Column } from '@components/ui/DataTable';
 import { timeAgo } from '@lib/time';
@@ -36,7 +36,11 @@ export default function DashboardClient({ portfolio, initialSymbol }: Props) {
   const cacheRef = useRef<Map<string, Array<{ t:string; o:number; h:number; l:number; c:number; v:number }>>>(new Map());
   const fetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inflightId = useRef(0);
-  const [chartMode, setChartMode] = useState<'line'|'candles'>(() => (typeof localStorage!=='undefined' ? (localStorage.getItem('dash.chart.mode') as any) : 'line') || 'line');
+  const [chartMode, setChartMode] = useState<'line'|'candles'>(() => {
+    if (typeof localStorage === 'undefined') return 'line';
+    const stored = localStorage.getItem('dash.chart.mode');
+    return stored === 'candles' ? 'candles' : 'line';
+  });
   const [showSMA20, setShowSMA20] = useState<boolean>(() => (localStorage?.getItem('dash.sma20')==='1'));
   const [showSMA50, setShowSMA50] = useState<boolean>(() => (localStorage?.getItem('dash.sma50')==='1'));
   // Log scale removed from UI per request; keep internal false constant
@@ -50,7 +54,9 @@ export default function DashboardClient({ portfolio, initialSymbol }: Props) {
   const [loadingQuotes, setLoadingQuotes] = useState(false);
   const [lastQuotesAt, setLastQuotesAt] = useState<Date | null>(null);
   const [sort, setSort] = useState<{ key:string; dir:'asc'|'desc' } | null>(null);
-  const [longName, setLongName] = useState<string>('');
+  // longName stored per holding; keep state for potential future global name override (currently unused)
+  // (disabled to satisfy no-unused-vars)
+  // const [longName, setLongName] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
   // Persist preferences
@@ -83,8 +89,9 @@ export default function DashboardClient({ portfolio, initialSymbol }: Props) {
           return { ...h, price, previousClose, marketValue, dayChange, dayChangePct, longName: q.longName || h.longName };
         }));
         setLastQuotesAt(new Date());
-      } catch(e:any) {
-        setError(e.message);
+      } catch(e) {
+        const msg = e instanceof Error ? e.message : 'Quotes failed';
+        setError(msg);
       } finally {
         setLoadingQuotes(false);
         timer = setTimeout(load, 15000);
@@ -111,8 +118,11 @@ export default function DashboardClient({ portfolio, initialSymbol }: Props) {
         const mapped = h.candles.map(c => ({ t:c.t, o:c.o, h:c.h, l:c.l, c:c.c, v:c.v }));
         cacheRef.current.set(key, mapped);
         setCandles(mapped);
-      } catch(e:any) {
-        if(inflightId.current === myId) setError(e.message);
+      } catch(e) {
+        if(inflightId.current === myId) {
+          const msg = e instanceof Error ? e.message : 'History failed';
+          setError(msg);
+        }
       } finally {
         if(inflightId.current === myId) setLoadingChart(false);
       }
@@ -124,7 +134,7 @@ export default function DashboardClient({ portfolio, initialSymbol }: Props) {
   const aggregatePrev = holdings.reduce((a,h)=> a + ((h.previousClose!=null && h.quantity) ? h.previousClose * h.quantity : 0), 0);
   const aggregateDayChange = aggregatePrev ? aggregateMV - aggregatePrev : 0;
   const aggregateDayPct = (aggregatePrev && aggregateDayChange) ? (aggregateDayChange / aggregatePrev) * 100 : 0;
-  const dayClass = aggregateDayChange >=0 ? 'pl-pos' : 'pl-neg';
+  // (aggregate day change class computed inline where needed)
 
   const [adding, setAdding] = useState(false);
   const [newSym, setNewSym] = useState('');
@@ -140,8 +150,9 @@ export default function DashboardClient({ portfolio, initialSymbol }: Props) {
       const pos = await api.createPosition(portfolio.id, newSym.trim().toUpperCase(), Number(newQty||'0'), Number(newCost||'0'));
       setHoldings(hs => [...hs, { id:pos.id, symbol:pos.symbol, quantity:pos.quantity, avgCost:pos.avgCost }]);
       setNewSym(''); setNewQty(''); setNewCost(''); setAdding(false);
-    } catch (e:any) {
-      alert(e.message);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Add failed';
+      alert(msg);
     }
   }
   async function commitEdit(id:string) {
@@ -151,14 +162,14 @@ export default function DashboardClient({ portfolio, initialSymbol }: Props) {
       if(qty==null && avgCost==null) { setEditingRow(null); return; }
       const p = await api.updatePosition(id, { quantity: qty, avgCost });
       setHoldings(hs => hs.map(h => h.id===id? { ...h, quantity:p.quantity, avgCost:p.avgCost }: h));
-    } catch(e:any) { alert(e.message); }
+  } catch(e) { const msg = e instanceof Error ? e.message : 'Update failed'; alert(msg); }
     finally { setEditingRow(null); }
   }
   async function delPosition(id:string) {
     if(!confirm('Delete position?')) return;
     const prev = holdings;
     setHoldings(hs => hs.filter(h=>h.id!==id));
-    try { await api.deletePosition(id); } catch(e:any) { alert(e.message); setHoldings(prev); }
+  try { await api.deletePosition(id); } catch(e) { const msg = e instanceof Error ? e.message : 'Delete failed'; alert(msg); setHoldings(prev); }
   }
   const holdingColumns: Column<HoldingRow>[] = [
     { key:'symbol', label:'Sym', sortable:true, render: h => <span onClick={()=>setSelected(h.symbol)} style={{ cursor:'pointer', fontWeight: h.symbol===selected ? 600: undefined, color: h.symbol===selected? 'var(--color-accent)': undefined }}>{h.symbol}</span> },
@@ -297,8 +308,8 @@ function AdvancedPriceChart({ data, mode, range, showSMA20, showSMA50, logScale,
   // Reset window on external event
   useEffect(()=>{
     function reset(){ setWindowIdx([0, data.length-1]); }
-    window.addEventListener('chart-reset', reset as any);
-    return ()=> window.removeEventListener('chart-reset', reset as any);
+    window.addEventListener('chart-reset', reset as EventListener);
+    return ()=> window.removeEventListener('chart-reset', reset as EventListener);
   },[data.length]);
   // Dynamic target visual candle count per range to keep candles large & informative
   const TARGET_PER_RANGE: Record<RangeKey, number> = { '1d': 18, '1w': 40, '1m': 70, '1y': 140, '5y': 220 };
@@ -375,8 +386,8 @@ function AdvancedPriceChart({ data, mode, range, showSMA20, showSMA50, logScale,
     const delta = e.deltaY;
     const factor = delta > 0 ? 1.1 : 0.9;
     const currentLen = (wEnd - wStart +1);
-    let newLen = Math.max(20, Math.min(baseData.length, Math.round(currentLen * factor)));
-    const rect = (e.currentTarget as any).getBoundingClientRect();
+  const newLen = Math.max(20, Math.min(baseData.length, Math.round(currentLen * factor)));
+  const rect = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
     const xRatio = (e.clientX - rect.left - padLeft) / (rect.width - gutterRight);
     const focusIdx = wStart + Math.round(currentLen * xRatio);
     let newStart = focusIdx - Math.round(newLen * xRatio);
@@ -386,7 +397,7 @@ function AdvancedPriceChart({ data, mode, range, showSMA20, showSMA50, logScale,
     setWindowIdx([newStart, newEnd]);
   }
   function onPointerDown(e: React.PointerEvent<SVGSVGElement>) {
-    (e.currentTarget as any).setPointerCapture(e.pointerId);
+    e.currentTarget.setPointerCapture(e.pointerId);
     dragState.current = { startX: e.clientX, startRange: windowIdx };
   }
   function onPointerMove(e: React.PointerEvent<SVGSVGElement>) {
@@ -402,14 +413,15 @@ function AdvancedPriceChart({ data, mode, range, showSMA20, showSMA50, logScale,
     if(newEnd > baseData.length-1) { newEnd = baseData.length-1; newStart = newEnd - len +1; }
     setWindowIdx([newStart, newEnd]);
   }
-  function onPointerUp(e: React.PointerEvent<SVGSVGElement>) { dragState.current = null; }
+  function onPointerUp() { dragState.current = null; }
   // Nice tick generation
   function niceTicks(low:number, high:number, target=5): number[] {
     const rawSpan = high - low || 1;
     const roughStep = rawSpan / (target - 1);
     const pow10 = Math.pow(10, Math.floor(Math.log10(roughStep)));
     const multiples = [1,2,2.5,5,10];
-    const step = multiples.find(m => m*pow10 >= roughStep) !* pow10; // forced non-null
+  const found = multiples.find(m => m*pow10 >= roughStep) || multiples[multiples.length-1];
+  const step = found * pow10;
     const first = Math.ceil(low / step) * step;
     const ticks: number[] = [];
     for(let v=first; v<=high; v+=step) ticks.push(v);

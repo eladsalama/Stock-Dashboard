@@ -1,6 +1,7 @@
 import { SQSClient, ReceiveMessageCommand, DeleteMessageCommand, SendMessageCommand } from "@aws-sdk/client-sqs";
 import { randomUUID } from 'crypto';
 import { PrismaClient } from "@prisma/client";
+type TxClient = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$extends'>;
 import { ingestCsvFromS3 } from "../services/ingest";
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { getS3 } from '../services/s3';
@@ -17,15 +18,15 @@ async function positionsSnapshotIngest(portfolioId:string, key:string, prisma:Pr
   // Reuse existing pending run if enqueue created it, else create here.
   let runId: string | undefined;
   try {
-    const existing = await prisma.$queryRawUnsafe<{ id:string }[]>(`SELECT id FROM "IngestRun" WHERE "portfolioId" = $1 AND "objectKey" = $2 ORDER BY "startedAt" DESC LIMIT 1`, portfolioId, key);
-    runId = existing?.[0]?.id;
+  const existing = await prisma.$queryRawUnsafe(`SELECT id FROM "IngestRun" WHERE "portfolioId" = $1 AND "objectKey" = $2 ORDER BY "startedAt" DESC LIMIT 1`, portfolioId, key) as Array<{ id:string }>;
+  runId = Array.isArray(existing) ? existing[0]?.id : undefined;
   } catch {}
   if(!runId) {
   runId = randomUUID();
     await prisma.$executeRawUnsafe('INSERT INTO "IngestRun" (id, "portfolioId", "objectKey", status) VALUES ($1,$2,$3,$4)', runId, portfolioId, key, 'pending');
   }
   let inserted=0;
-  await prisma.$transaction(async (tx)=>{
+  await prisma.$transaction(async (tx: TxClient)=>{
     for(let i=1;i<lines.length;i++) {
       const cols = lines[i].split(',');
       if(cols.length < 3) continue;

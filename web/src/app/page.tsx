@@ -1,4 +1,4 @@
-import { api, Portfolio } from '@lib/api';
+import { api, Portfolio, Position } from '@lib/api';
 import HomeClient from './home-client';
 
 async function load() {
@@ -16,7 +16,7 @@ export default async function Home() {
     const p = initial[0];
     const detail = await api.getPortfolioWithPositions(p.id);
   const mod = await import('../components/dashboard/DashboardClient');
-  const DashboardClient: React.ComponentType<{ portfolio: Portfolio & { positions: any[] } }> = mod.default;
+  const DashboardClient: React.ComponentType<{ portfolio: Portfolio & { positions: Position[] } }> = mod.default;
   return <DashboardClient portfolio={detail.portfolio} />;
   }
   return <HomeClient initial={initial} />;

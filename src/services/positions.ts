@@ -44,7 +44,9 @@ export async function recomputePositions(portfolioId: string, prisma: PrismaClie
   }
 
   // Also delete any position whose symbol not in current aggregate (i.e., all trades deleted scenario)
-  const currentSymbols = rows.filter(r => Number(r.qty) !== 0).map(r => r.symbol);
+  const currentSymbols = rows
+    .filter((r: { symbol:string; qty:string }) => Number(r.qty) !== 0)
+    .map((r: { symbol:string; qty:string }) => r.symbol);
   await prisma.position.deleteMany({
     where: { portfolioId, NOT: currentSymbols.length ? { symbol: { in: currentSymbols } } : {} },
   });

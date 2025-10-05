@@ -24,7 +24,7 @@ export interface PositionsMetrics { totalMV: number; totalPrev: number; portfoli
 
 const PositionsLive = React.forwardRef<PositionsLiveHandle, Props>(function PositionsLive({ portfolioId, initial, onMetrics }, ref) {
   const [positions, setPositions] = useState<Enriched[]>(initial);
-  const [loadingQuotes, setLoadingQuotes] = useState(false);
+  // (quote loading state omitted; can be reintroduced if UI spinner needed)
   const [lastQuoteAt, setLastQuoteAt] = useState<Date | null>(null);
   const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null);
   const [hydrated, setHydrated] = useState(false);
@@ -50,7 +50,7 @@ const PositionsLive = React.forwardRef<PositionsLiveHandle, Props>(function Posi
     let timer: ReturnType<typeof setTimeout> | undefined;
     async function loadQuotes() {
       if (!positions.length) return; // new row has no symbol yet maybe
-      setLoadingQuotes(true);
+  // quotes load begin
       try {
         const symbols = Array.from(new Set(positions.map(p => p.symbol)));
         const qmap = await api.batchQuotes(symbols);
@@ -67,13 +67,12 @@ const PositionsLive = React.forwardRef<PositionsLiveHandle, Props>(function Posi
         }));
         setLastQuoteAt(new Date());
       } finally {
-        setLoadingQuotes(false);
+  // quotes load end
         timer = setTimeout(loadQuotes, 15000);
       }
     }
     loadQuotes();
     return () => { if (timer) clearTimeout(timer); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [positions.length]);
 
   function enterEdit(id:string) { setPositions(ps => ps.map(p => p.id===id? { ...p, _editing:true } : (p._editing? { ...p, _editing:false }: p))); }
@@ -126,8 +125,7 @@ const PositionsLive = React.forwardRef<PositionsLiveHandle, Props>(function Posi
   const totalPL = positions.reduce((acc, p) => acc + (p.pl || 0), 0);
   const plPct = (totalMV && (totalMV - totalPL) !== 0) ? (totalPL / (totalMV - totalPL)) * 100 : 0;
   useEffect(()=>{ if(onMetrics) onMetrics({ totalMV, totalPrev, portfolioDayChange, portfolioDayPct, totalPL, plPct, lastQuoteAt });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [totalMV,totalPrev,portfolioDayChange,portfolioDayPct,totalPL,plPct,lastQuoteAt, positions.length]);
+  }, [totalMV,totalPrev,portfolioDayChange,portfolioDayPct,totalPL,plPct,lastQuoteAt, positions.length, onMetrics]);
 
   const columns: Column<Enriched>[] = [
     { key: 'symbol', label: 'Symbol', sortable: true, render: r => (

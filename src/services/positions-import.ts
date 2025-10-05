@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+type TxClient = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$extends'>;
 
 // Parse positions snapshot CSV: symbol,quantity,avgCost (header required)
 export function parsePositionsSnapshot(csv: string): Array<{ symbol:string; quantity:number; avgCost:number }> {
@@ -28,7 +29,7 @@ export async function parsePositionsCsvAndUpsert(portfolioId:string, key:string,
   const runId = crypto.randomUUID();
   await prisma.$executeRawUnsafe('INSERT INTO "IngestRun" (id, "portfolioId", "objectKey", status) VALUES ($1,$2,$3,$4)', runId, portfolioId, key, 'pending');
   let ok = 0;
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: TxClient) => {
     for(const r of rows) {
       const existing = await tx.position.findFirst({ where: { portfolioId, symbol: r.symbol } });
       if(existing) {
