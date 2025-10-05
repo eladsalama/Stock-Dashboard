@@ -31,5 +31,23 @@ Local runbook (dev):
 Notes
 - Defaults: LocalStack at http://localhost:4566, region us-east-1, bucket `trades-bucket`, queue `trades-ingest-queue`.
 - You can manually trigger via `POST /v1/dev/ingest { portfolioId, key }` if needed.
+
+## CI Overview
+
+GitHub Actions workflow (`.github/workflows/ci.yml`) runs automatically on:
+- Pushes to `main`
+- Pull requests targeting `main`
+
+Pipeline stages:
+1. Quick check job: installs deps, runs lint + typecheck fast.
+2. Full build-test job (depends on quick check): spins up Postgres & Redis, applies migrations (`prisma migrate deploy`), then runs Vitest tests.
+
+Environment in CI:
+- Postgres 16 (fresh schema each run)
+- Redis 7 (currently unused in tests but available)
+- No LocalStack (S3/SQS paths should be unit-tested with mocks if added)
+
+Add migrations before pushing (use `prisma migrate dev`)—CI only applies existing migration folders. Failures in lint, typecheck, migrations, or tests will fail the run.
+
 # Stock-Dashboard
 A Node.js + TypeScript Fastify server for building a stock portfolio dashboard with real-time data and analytics.

@@ -54,6 +54,21 @@ const portfoliosRoutes: FastifyPluginAsync = async (app) => {
     return { portfolio: p };
   });
 
+  // List recent ingestion runs for a portfolio
+  app.get("/v1/portfolios/:id/ingests", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const exists = await app.prisma.portfolio.findUnique({ where: { id }, select: { id: true } });
+    if (!exists) return reply.code(404).send({ error: "Not found" });
+    const ingests = await app.prisma.$queryRaw<Array<{ id: string; objectKey: string; status: string; rowsOk: number; rowsFailed: number; startedAt: Date; finishedAt: Date | null }>>`
+      SELECT id, "objectKey", status, "rowsOk", "rowsFailed", "startedAt", "finishedAt"
+      FROM "IngestRun"
+      WHERE "portfolioId" = ${id}
+      ORDER BY "startedAt" DESC
+      LIMIT 20
+    `;
+    return { ingests };
+  });
+
   // Update (partial)
   const patchSchema = z.object({
     name: z.string().min(1).max(100).optional(),
