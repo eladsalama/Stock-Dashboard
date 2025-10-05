@@ -1,6 +1,51 @@
 import { SQSClient, ReceiveMessageCommand, DeleteMessageCommand, SendMessageCommand } from "@aws-sdk/client-sqs";
+import { randomUUID } from 'crypto';
 import { PrismaClient } from "@prisma/client";
 import { ingestCsvFromS3 } from "../services/ingest";
+import { GetObjectCommand } from '@aws-sdk/client-s3';
+import { getS3 } from '../services/s3';
+// lightweight inline positions snapshot ingest to avoid path resolution issues
+async function positionsSnapshotIngest(portfolioId:string, key:string, prisma:PrismaClient, s3KeyFetcher:()=>Promise<string>) {
+  const text = await s3KeyFetcher();
+  const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  if(!lines.length) return { inserted:0, runId: undefined };
+  const header = lines[0].toLowerCase();
+  if(!(header.includes('symbol') && (header.includes('quantity') || header.includes('qty')) && header.includes('avgcost'))) {
+    console.warn(`[worker] positions ingest skipped (unrecognized header) portfolio=${portfolioId} key=${key}`);
+    return { inserted:0, runId: undefined };
+  }
+  // Reuse existing pending run if enqueue created it, else create here.
+  let runId: string | undefined;
+  try {
+    const existing = await prisma.$queryRawUnsafe<{ id:string }[]>(`SELECT id FROM "IngestRun" WHERE "portfolioId" = $1 AND "objectKey" = $2 ORDER BY "startedAt" DESC LIMIT 1`, portfolioId, key);
+    runId = existing?.[0]?.id;
+  } catch {}
+  if(!runId) {
+  runId = randomUUID();
+    await prisma.$executeRawUnsafe('INSERT INTO "IngestRun" (id, "portfolioId", "objectKey", status) VALUES ($1,$2,$3,$4)', runId, portfolioId, key, 'pending');
+  }
+  let inserted=0;
+  await prisma.$transaction(async (tx)=>{
+    for(let i=1;i<lines.length;i++) {
+      const cols = lines[i].split(',');
+      if(cols.length < 3) continue;
+      const symbol = cols[0]?.trim().toUpperCase();
+      const quantity = Number(cols[1]);
+      const avgCost = Number(cols[2]);
+      if(!symbol || !isFinite(quantity) || !isFinite(avgCost)) continue;
+      const existing = await tx.position.findFirst({ where:{ portfolioId, symbol } });
+      if(existing) {
+        await tx.position.update({ where:{ id: existing.id }, data:{ quantity, avgCost } });
+      } else {
+        await tx.position.create({ data:{ portfolioId, symbol, quantity, avgCost } });
+      }
+      inserted++;
+    }
+    await tx.portfolio.update({ where:{ id:portfolioId }, data:{ lastIngestAt:new Date(), lastIngestStatus:`positions:${inserted}` } });
+  });
+  await prisma.$executeRawUnsafe('UPDATE "IngestRun" SET status=$1, "rowsOk"=$2, "rowsFailed"=$3, "finishedAt"=$4 WHERE id=$5','ok', inserted, 0, new Date(), runId);
+  return { inserted, runId };
+}
 
 const REGION = process.env.AWS_REGION || "us-east-1";
 const ENDPOINT = process.env.AWS_ENDPOINT_URL || "http://localhost:4566";
@@ -39,6 +84,10 @@ async function main() {
     console.log(`[worker] SQS endpoint: ${ENDPOINT}`);
     console.log(`[worker] queue: ${QUEUE_URL}`);
     console.log(`[worker] dlq:   ${DLQ_URL}`);
+    // Heartbeat so we know it's alive even if no messages
+    setInterval(()=>{
+      console.log('[worker] heartbeat waiting for messages');
+    }, 30000);
     while (true) {
       const res = await sqs.send(new ReceiveMessageCommand({ QueueUrl: QUEUE_URL, MaxNumberOfMessages: 5, WaitTimeSeconds: 10 }));
       const messages = res.Messages ?? [];
@@ -55,11 +104,23 @@ async function main() {
           const fallback = envelope as Partial<Msg>;
           const portfolioId = s3Msg?.portfolioId ?? fallback.portfolioId ?? "";
           const key = s3Msg?.key ?? fallback.key ?? "";
+          console.log(`[worker] message parsed portfolio=${portfolioId || 'N/A'} key='${key}' attempt=${(envelope as any)?.attempt || 0}`);
           if (portfolioId && key) {
             try {
-              console.log(`[worker] ingesting key='${key}' portfolio='${portfolioId}'`);
-              const result = await ingestCsvFromS3(portfolioId, key, prisma);
-              console.log(`[worker] ingest done: inserted=${result.inserted}`);
+              // Heuristic: fetch just head or key path pattern to decide
+              const isPositions = key.includes('/positions/');
+              if (isPositions) {
+                console.log(`[worker] positions snapshot ingest start portfolio=${portfolioId} key='${key}'`);
+                const s3 = getS3();
+                const obj = await s3.send(new GetObjectCommand({ Bucket: process.env.TRADES_BUCKET || 'trades-bucket', Key: key }));
+                const textLoader = async () => (await obj.Body?.transformToString()) || '';
+                const { inserted, runId } = await positionsSnapshotIngest(portfolioId, key, prisma, textLoader);
+                console.log(`[worker] positions snapshot ingest done portfolio=${portfolioId} key='${key}' runId=${runId} rows=${inserted}`);
+              } else {
+                console.log(`[worker] trade ingest start portfolio=${portfolioId} key='${key}'`);
+                const result = await ingestCsvFromS3(portfolioId, key, prisma);
+                console.log(`[worker] trade ingest done portfolio=${portfolioId} key='${key}' inserted=${result.inserted}`);
+              }
             } catch (err) {
               // Simple retry with backoff: re-enqueue with attempt count
               const attempt = Number((envelope as Record<string, unknown>)?.attempt || 0) + 1;

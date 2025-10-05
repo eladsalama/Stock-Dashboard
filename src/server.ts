@@ -18,12 +18,22 @@ export async function buildServer() {
     logger: { level: env.LOG_LEVEL },
   });
 
-  await app.register(cors, { origin: env.CORS_ORIGIN });
+  await app.register(cors, {
+    origin: env.CORS_ORIGIN,
+    methods: ['GET','POST','PATCH','DELETE','OPTIONS'],
+    allowedHeaders: ['Content-Type'],
+  });
   await app.register(prismaPlugin);
   await app.register(rateLimit, { global: false }); // we'll enable per-route
   await app.register(redisPlugin);
   // Dev-only LocalStack wiring (safe no-op in production)
   await app.register(awsDevPlugin);
+
+  // Support CSV uploads (import positions) - Fastify returns 415 if no parser
+  app.addContentTypeParser('text/csv', { parseAs: 'string' }, (req, body, done) => {
+    done(null, body);
+  });
+
   await app.register(quotesRoutes);
   await app.register(historyRoutes);
   await app.register(portfoliosRoutes);

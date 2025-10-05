@@ -3,6 +3,10 @@ import yahooFinance from "yahoo-finance2";
 export type Quote = {
   symbol: string;
   price: number;
+  previousClose?: number;
+  change?: number; // price - previousClose
+  changePercent?: number; // change / previousClose * 100
+  longName?: string;
   currency?: string;
   source: "yahoo";
   asOf: string; // ISO timestamp
@@ -34,9 +38,16 @@ export async function fetchYahooQuote(symbol: string): Promise<Quote> {
     asOf = new Date().toISOString();
   }
 
+  const previousClose = q.regularMarketPreviousClose != null ? Number(q.regularMarketPreviousClose) : undefined;
+  const change = previousClose != null ? Number(price) - previousClose : undefined;
+  const changePercent = (change != null && previousClose) ? (change / previousClose) * 100 : undefined;
   return {
     symbol: q.symbol ?? s,
     price: Number(price),
+    previousClose,
+    change,
+    changePercent,
+    longName: (q.longName as string) || (q.shortName as string) || undefined,
     currency: q.currency ?? "USD",
     source: "yahoo",
     asOf,
