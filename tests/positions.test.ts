@@ -1,6 +1,5 @@
 import { beforeAll, afterAll, describe, it, expect } from 'vitest';
 import { PrismaClient } from '@prisma/client';
-import { recomputePositions } from '../src/services/positions';
 import { ingestCsvText } from '../src/services/ingest';
 
 const prisma = new PrismaClient();
