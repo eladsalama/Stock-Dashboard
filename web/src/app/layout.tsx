@@ -1,6 +1,5 @@
 import './globals.css';
 import React from 'react';
-import Link from 'next/link';
 import dynamic from 'next/dynamic';
 const WatchlistClient = dynamic(() => import('./watchlist-client'), { ssr: false });
 const SidebarPortfolios = dynamic(() => import('./sidebar-portfolios-client'), { ssr:false });

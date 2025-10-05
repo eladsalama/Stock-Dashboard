@@ -55,8 +55,9 @@ export default function HomeClient({ initial }: { initial: Portfolio[] }) {
       const updated = await api.renamePortfolio(id, name);
       setPortfolios(ps => ps.map(p => p.id === id ? { ...p, name: updated.name } : p));
       push({ type: 'success', title: 'Renamed', message: name });
-    } catch (e:any) {
-      push({ type: 'error', title: 'Rename failed', message: e.message });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Rename failed';
+      push({ type: 'error', title: 'Rename failed', message: msg });
     } finally {
       setEditing(null);
     }
@@ -69,9 +70,10 @@ export default function HomeClient({ initial }: { initial: Portfolio[] }) {
     try {
       await api.deletePortfolio(id);
       push({ type: 'success', title: 'Deleted', message: 'Portfolio removed' });
-    } catch (e:any) {
+    } catch (e) {
       setPortfolios(prev); // rollback
-      push({ type: 'error', title: 'Delete failed', message: e.message });
+      const msg = e instanceof Error ? e.message : 'Delete failed';
+      push({ type: 'error', title: 'Delete failed', message: msg });
     }
   }
   return (

@@ -15,8 +15,9 @@ export default async function Home() {
   if (initial.length === 1) {
     const p = initial[0];
     const detail = await api.getPortfolioWithPositions(p.id);
-    const DashboardClient = (await import('../components/dashboard/DashboardClient')).default as any;
-    return <DashboardClient portfolio={detail.portfolio as any} />;
+  const mod = await import('../components/dashboard/DashboardClient');
+  const DashboardClient: React.ComponentType<{ portfolio: Portfolio & { positions: any[] } }> = mod.default;
+  return <DashboardClient portfolio={detail.portfolio} />;
   }
   return <HomeClient initial={initial} />;
 }

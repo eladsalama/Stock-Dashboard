@@ -86,7 +86,6 @@ export default function DashboardClient({ portfolio }: Props) {
   const aggregateMV = holdings.reduce((a,h) => a + (h.marketValue || 0), 0);
   const aggregateDayChange = holdings.reduce((a,h) => a + (h.dayChange || 0), 0);
   const aggregateDayPct = aggregateMV ? (aggregateDayChange / (aggregateMV - aggregateDayChange)) * 100 : 0;
-  const dayClass = aggregateDayChange >= 0 ? 'pl-pos' : 'pl-neg';
 
   const holdingColumns: Column<HoldingRow>[] = [
     { key:'symbol', label:'Sym', sortable:true, render: h => <span style={{ cursor:'pointer', color: h.symbol===selected ? 'var(--color-accent)' : undefined }} onClick={() => setSelected(h.symbol)}>{h.symbol}</span> },
