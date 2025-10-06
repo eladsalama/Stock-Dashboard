@@ -239,7 +239,12 @@ export default function SidebarPortfolios() {
         const isTemp = p.id.startsWith('temp-');
         const editing = editingId === p.id;
         return (
-          <div key={p.id} style={{ display:'flex', flexDirection:'column', gap:4, border:'1px solid var(--color-border)', padding:'6px 8px', borderRadius:6, background: active? 'var(--color-bg-alt)':'#0d1117', opacity:isTemp?0.6:1 }}>
+          <div
+            key={p.id}
+            style={{ display:'flex', flexDirection:'column', gap:4, border:'1px solid var(--color-border)', padding:'6px 8px', borderRadius:6, background: active? 'var(--color-bg-alt)':'#0d1117', opacity:isTemp?0.6:1, position:'relative' }}
+            onMouseEnter={e=>{ const act = e.currentTarget.querySelector<HTMLDivElement>('.pf-actions'); if(act) act.style.opacity='1'; }}
+            onMouseLeave={e=>{ const act = e.currentTarget.querySelector<HTMLDivElement>('.pf-actions'); if(act) act.style.opacity='0'; }}
+          >
             <div style={{ display:'flex', alignItems:'center', gap:6 }}>
               {!editing && (
                 <a
@@ -255,7 +260,7 @@ export default function SidebarPortfolios() {
                   <input autoFocus value={editingVal} onChange={e=>setEditingVal(e.target.value)} onBlur={commitEdit} style={{ width:'100%', padding:'2px 4px', fontSize:12 }} />
                 </form>
               )}
-              <div style={{ display:'flex', gap:4 }}>
+              <div className='pf-actions' style={{ display:'flex', gap:4, opacity:0, transition:'opacity 0.15s' }}>
                 {!editing && <button title="Rename" onClick={()=>beginEdit(p)} className="mini-btn">✎</button>}
                 <button title="Delete" onClick={()=>deletePortfolio(p)} className="mini-btn" style={{ color:'#f85149' }}>✕</button>
               </div>

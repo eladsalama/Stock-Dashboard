@@ -1,6 +1,5 @@
 import React from 'react';
 import { Portfolio, Position } from '@lib/api';
-import BackLink from '@components/ui/BackLink';
 
 // Simple server component wrapper that loads the dashboard chart panel for a single symbol
 // Reuses the dashboard client but with a synthetic single-position portfolio so user can deep-link.
@@ -18,14 +17,5 @@ async function load(symbol: string) {
 export default async function SymbolPage({ params }: { params: { symbol: string } }) {
   const portfolio = await load(params.symbol);
   const DashboardClient = (await import('../../../components/dashboard/DashboardClient')).default as React.ComponentType<{ portfolio: Portfolio & { positions: Position[] }; initialSymbol?: string }>;
-  return (
-    <div style={{ display:'flex', flexDirection:'column', gap:8, height:'calc(100vh - 40px - 22px)' }}>
-      <div>
-        <BackLink />
-      </div>
-      <div style={{ flex:1, minHeight:0 }}>
-        <DashboardClient portfolio={portfolio} initialSymbol={params.symbol} />
-      </div>
-    </div>
-  );
+  return <DashboardClient portfolio={portfolio} initialSymbol={params.symbol} />;
 }

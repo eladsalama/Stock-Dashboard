@@ -1,5 +1,4 @@
 import { api, Position, IngestRun } from '@lib/api';
-import BackLink from '@components/ui/BackLink';
 import PortfolioClient from './portfolio-client';
 import ErrorBoundary from '@components/ErrorBoundary';
 
@@ -18,11 +17,8 @@ async function load(id: string) {
 export default async function PortfolioPage({ params }: Props) {
   const { positions, ingests, name, baseCcy } = await load(params.id);
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:24 }}>
-      <BackLink />
-      <ErrorBoundary label={`portfolio:${params.id}`}>
-        <PortfolioClient id={params.id} initialPositions={positions} initialIngests={ingests} initialName={name} baseCcy={baseCcy} />
-      </ErrorBoundary>
-    </div>
+    <ErrorBoundary label={`portfolio:${params.id}`}>
+      <PortfolioClient id={params.id} initialPositions={positions} initialIngests={ingests} initialName={name} baseCcy={baseCcy} />
+    </ErrorBoundary>
   );
 }

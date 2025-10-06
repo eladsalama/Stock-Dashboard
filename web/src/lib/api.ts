@@ -147,6 +147,18 @@ export const api = {
   async history(symbol: string, range: string) {
     return request<{ symbol: string; range: string; candles: Array<{ t: string; o: number; h: number; l: number; c: number; v: number }> }>(`/v1/quotes/${encodeURIComponent(symbol)}/history?range=${encodeURIComponent(range)}`);
   },
+  async quote(symbol: string) {
+    return request<{ symbol:string; price:number; previousClose?:number; change?:number; changePercent?:number; longName?:string; currency?:string; asOf:string; cached?:boolean }>(`/v1/quotes/${encodeURIComponent(symbol)}`);
+  },
+  async stats(symbol: string) {
+    return request<import('../../../src/services/stats').SymbolStats>(`/v1/quotes/${encodeURIComponent(symbol)}/stats`);
+  },
+  async news(symbol: string) {
+    return request<{ items: Array<import('../../../src/services/news').NewsItem>; cached?: boolean }>(`/v1/quotes/${encodeURIComponent(symbol)}/news`);
+  },
+  async search(q: string) {
+    return request<{ items: Array<{ symbol:string; shortname?:string; longname?:string; exch?:string }> }>(`/v1/search?q=${encodeURIComponent(q)}`);
+  },
   // --- Positions CRUD ---
   async createPosition(portfolioId: string, symbol: string, quantity: number, avgCost: number) {
     const data = await request<{ position: Position }>(`/v1/portfolios/${portfolioId}/positions`, {

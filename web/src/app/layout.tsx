@@ -1,11 +1,12 @@
 import './globals.css';
 import React from 'react';
 import FallbackLink from '@components/ui/FallbackLink';
-import dynamic from 'next/dynamic';
 const WatchlistClient = dynamic(() => import('./watchlist-client'), { ssr: false });
 // Use purely client-side sidebar for stability across navigations
 const SidebarPortfolios = dynamic(() => import('./sidebar-portfolios-client'), { ssr: false });
 import { ToastProvider } from '@components/ui/toast';
+import dynamic from 'next/dynamic';
+const TopSearchClient = dynamic(()=>import('./top-search-client'), { ssr:false });
 import SidebarHeaderClient from './sidebar-header-client';
 const StatusStrip = dynamic(() => import('@components/ui/StatusStrip'), { ssr:false });
 
@@ -43,6 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <div style={{ display:'flex', alignItems:'center', gap:12 }}>
               <FallbackLink href="/" style={{ fontWeight:600, textDecoration:'none', color:'inherit', cursor:'pointer' }}>📈 Stock Dashboard</FallbackLink>
               <span className="status-pill">API: live</span>
+              <TopSearchClient />
             </div>
             <div style={{ fontSize:12, opacity:0.7 }}>Desktop Mode</div>
           </div>
@@ -56,8 +58,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <div className="sidebar-section" style={{ display:'flex', flexDirection:'column', gap:4 }}>
                 <SidebarPortfolios />
               </div>
-              <div className="sidebar-header" style={{ borderTop:'1px solid var(--color-border)' }}>Watchlist</div>
-              <div className="sidebar-section" style={{ fontSize:12 }}>
+              <div className="sidebar-section" style={{ fontSize:12, display:'flex', flexDirection:'column', gap:6, borderTop:'1px solid var(--color-border)', paddingTop:6 }}>
                 <WatchlistClient />
               </div>
               <div style={{ marginTop:'auto', padding: '8px 10px', fontSize:10, opacity:0.5 }}>
