@@ -11,6 +11,7 @@ import historyRoutes from "./routes/history";
 import portfoliosRoutes from "./routes/portfolios";
 import uploadsRoutes from "./routes/uploads";
 import devRoutes from "./routes/dev";
+import exploreRoutes from "./routes/explore";
 import awsDevPlugin from "./plugins/aws-dev";
 import authPlugin from "./plugins/auth";
 import authRoutes from "routes/auth";
@@ -61,6 +62,7 @@ export async function buildServer() {
   await app.register(portfoliosRoutes);
   await app.register(uploadsRoutes);
   await app.register(devRoutes);
+  await app.register(exploreRoutes);
 
   app.get("/healthz", async () => ({ ok: true }));
   app.get("/version", async () => ({

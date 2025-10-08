@@ -82,7 +82,6 @@ a:hover {
   padding: 12px 14px;
   font-weight: 600;
   font-size: 14px;
-  border-bottom: 1px solid var(--color-border);
 }
 .sidebar-section {
   padding: 8px 10px;
@@ -235,6 +234,17 @@ table.data-table tbody tr:hover {
     background-position: -200% 0;
   }
 }
+
+/* Hide scrollbar for Explore page and Dashboard (Chrome, Safari, Edge, Opera, OperaGX) */
+.explore-container::-webkit-scrollbar,
+.dashboard-scroll-container::-webkit-scrollbar,
+.news-scroll-container::-webkit-scrollbar,
+.main-content-scroll::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
 /* Light theme overrides */
 html[data-theme="light"] {
   background: #ffffff;
@@ -259,6 +269,16 @@ html[data-theme="light"] {
   --shadow-lg: 0 6px 24px rgba(140, 149, 159, 0.2);
 }
 
+/* Modal backdrop and content wrapper isolation */
+.modal-backdrop-overlay {
+  isolation: isolate;
+}
+
+.modal-content-wrapper {
+  isolation: isolate;
+  opacity: 1 !important;
+}
+
 /* Force solid backgrounds for all menu elements - override any theme transparency */
 .menu-pop,
 .user-menu-popup,
@@ -272,6 +292,7 @@ html[data-theme="light"] {
   border: 1px solid var(--color-border) !important;
   box-shadow: var(--shadow-lg) !important;
   z-index: 9999 !important;
+  isolation: isolate !important;
 }
 
 /* Dark theme - ensure solid dark backgrounds */
@@ -304,15 +325,6 @@ html[data-theme="light"] .user-menu-dropdown-fixed {
     opacity: 1;
     transform: scale(1);
   }
-}
-
-/* Light theme - ensure solid light backgrounds */
-html[data-theme="light"] .menu-pop,
-html[data-theme="light"] .user-menu-popup,
-html[data-theme="light"] .modal-surface,
-html[data-theme="light"] .manage-account-modal {
-  background: #f6f8fa !important;
-  border-color: #d0d7de !important;
 }
 
 /* Error notifications should be above everything */

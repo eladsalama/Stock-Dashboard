@@ -335,6 +335,54 @@ export const api = {
       items: Array<{ symbol: string; shortname?: string; longname?: string; exch?: string }>;
     }>(`/v1/search?q=${encodeURIComponent(q)}`);
   },
+  // --- Explore / Market Movers ---
+  async exploreStocks(category: string) {
+    return request<{
+      category: string;
+      type: string;
+      items: Array<{
+        symbol: string;
+        name: string;
+        price: number;
+        change: number;
+        changePercent: number;
+        volume: number;
+        marketCap?: number;
+        avgVolume?: number;
+      }>;
+    }>(`/v1/explore/stocks/${category}`);
+  },
+  async exploreETFs(category: string) {
+    return request<{
+      category: string;
+      type: string;
+      items: Array<{
+        symbol: string;
+        name: string;
+        price: number;
+        change: number;
+        changePercent: number;
+        volume: number;
+        marketCap?: number;
+        avgVolume?: number;
+      }>;
+    }>(`/v1/explore/etfs/${category}`);
+  },
+  async exploreCrypto(category: string) {
+    return request<{
+      category: string;
+      type: string;
+      items: Array<{
+        symbol: string;
+        name: string;
+        price: number;
+        change: number;
+        changePercent: number;
+        volume: number;
+        marketCap?: number;
+      }>;
+    }>(`/v1/explore/crypto/${category}`);
+  },
   // --- Positions CRUD ---
   async createPosition(portfolioId: string, symbol: string, quantity: number, avgCost: number) {
     const data = await request<{ position: Position }>(`/v1/portfolios/${portfolioId}/positions`, {

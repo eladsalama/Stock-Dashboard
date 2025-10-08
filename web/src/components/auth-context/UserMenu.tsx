@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import ReactDOM from "react-dom";
 import { useAuth } from "./AuthContext";
 import { api } from "../../lib/api";
 
@@ -26,28 +27,54 @@ declare global {
   }
 }
 
-// Modal backdrop component
+// Modal backdrop component - uses React Portal to render outside the app hierarchy
 const ModalBackdrop: React.FC<{ onClose: () => void; children: React.ReactNode }> = ({
   onClose,
   children,
-}) => (
-  <div
-    style={{
-      position: "fixed",
-      inset: 0,
-      backgroundColor: "rgba(0, 0, 0, 0.6)",
-      backdropFilter: "blur(8px)",
-      zIndex: 9998,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: "8px",
-    }}
-    onClick={onClose}
-  >
-    <div onClick={(e) => e.stopPropagation()}>{children}</div>
-  </div>
-);
+}) => {
+  // No theme-dependent styling here; avoid unused variable.
+  
+  // Render modal using React Portal directly to document.body
+  if (typeof document === "undefined") return null;
+  
+  return ReactDOM.createPortal(
+    <>
+      {/* Backdrop overlay */}
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          backgroundColor: "rgba(0,0,0,0.6)",
+          zIndex: 999998,
+        }}
+        onClick={onClose}
+      />
+      {/* Modal content */}
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 999999,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "8px",
+          pointerEvents: "none",
+        }}
+      >
+        <div 
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            pointerEvents: "auto",
+          }}
+        >
+          {children}
+        </div>
+      </div>
+    </>,
+    document.body
+  );
+};
 
 // Login Modal Component
 const LoginModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
@@ -446,7 +473,7 @@ const ManageAccountModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         border: theme === "light" ? "1px solid #d0d7de" : "1px solid #30363d",
         borderRadius: "12px",
         boxShadow: theme === "light" ? "0 8px 28px rgba(0,0,0,0.15)" : "0 8px 28px rgba(0,0,0,0.8)",
-        padding: "24px",
+        padding: "40px",
         width: "100%",
         maxWidth: "800px",
         position: "relative",
@@ -695,11 +722,20 @@ export const UserMenu: React.FC = () => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [showManage, setShowManage] = useState(false);
+  const buttonRef = React.useRef<HTMLButtonElement>(null);
+  const [buttonRect, setButtonRect] = React.useState<DOMRect | null>(null);
 
   const handleLogout = () => {
     logout();
     setDropdownOpen(false);
     window.location.href = "/";
+  };
+
+  const handleToggleDropdown = () => {
+    if (!dropdownOpen && buttonRef.current) {
+      setButtonRect(buttonRef.current.getBoundingClientRect());
+    }
+    setDropdownOpen(!dropdownOpen);
   };
 
   const userInitial =
@@ -723,7 +759,8 @@ export const UserMenu: React.FC = () => {
       {/* User Avatar Button */}
       <div style={{ position: "relative" }}>
         <button
-          onClick={() => setDropdownOpen(!dropdownOpen)}
+          ref={buttonRef}
+          onClick={handleToggleDropdown}
           style={{
             display: "flex",
             alignItems: "center",
@@ -749,14 +786,13 @@ export const UserMenu: React.FC = () => {
           {userInitial}
         </button>
 
-        {/* Dropdown Menu - positioned below avatar */}
-        {dropdownOpen && (
+        {/* Dropdown Menu - rendered via Portal */}
+        {dropdownOpen && buttonRect && typeof document !== "undefined" && ReactDOM.createPortal(
           <div
             style={{
-              position: "absolute",
-              right: "0",
-              top: "100%",
-              marginTop: "8px",
+              position: "fixed",
+              top: `${buttonRect.bottom + 8}px`,
+              right: `${window.innerWidth - buttonRect.right}px`,
               width: "220px",
               backgroundColor: theme === "light" ? "#ffffff" : "#161b22",
               border: theme === "light" ? "1px solid #d0d7de" : "1px solid #30363d",
@@ -764,7 +800,7 @@ export const UserMenu: React.FC = () => {
               boxShadow:
                 theme === "light" ? "0 8px 28px rgba(0,0,0,0.15)" : "0 8px 28px rgba(0,0,0,0.8)",
               padding: "12px",
-              zIndex: 50,
+              zIndex: 999997,
             }}
           >
             {/* User greeting section */}
@@ -908,20 +944,22 @@ export const UserMenu: React.FC = () => {
                 Log in
               </button>
             )}
-          </div>
+          </div>,
+          document.body
         )}
       </div>
 
       {/* Click outside to close dropdown */}
-      {dropdownOpen && (
+      {dropdownOpen && typeof document !== "undefined" && ReactDOM.createPortal(
         <div
           style={{
             position: "fixed",
             inset: 0,
-            zIndex: 40,
+            zIndex: 999996,
           }}
           onClick={() => setDropdownOpen(false)}
-        />
+        />,
+        document.body
       )}
     </>
   );

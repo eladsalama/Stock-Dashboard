@@ -20,7 +20,6 @@ interface Props {
   showVolMA: boolean;
   showBollingerBands?: boolean;
   showEMA20?: boolean;
-  symbol?: string; // optional symbol to self-fetch from Yahoo if data not provided
 }
 
 export default function AdvancedPriceChart({
@@ -31,7 +30,6 @@ export default function AdvancedPriceChart({
   showVolMA,
   showBollingerBands = false,
   showEMA20 = false,
-  symbol,
 }: Props) {
   const { theme } = useAuth();
   const [hover, setHover] = React.useState<number | null>(null);
@@ -185,8 +183,7 @@ export default function AdvancedPriceChart({
   const numCandles = drawData.length;
   function xForIdx(idx: number) { return padLeft + (idx / Math.max(1, numCandles - 1)) * priceW; }
   
-  // Store timestamps for labels
-  const drawTimes = drawData.map(d => new Date(d.t).getTime());
+  // (Removed unused drawTimes variable to satisfy lint)
   
   // Adaptive candle width from data density
   let candleWidth: number;

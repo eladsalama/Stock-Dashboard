@@ -12,6 +12,7 @@ export default function TopSearchClient() {
     Array<{ symbol: string; shortname?: string; longname?: string; exch?: string }>
   >([]);
   const [open, setOpen] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
   const router = useRouter();
   const boxRef = useRef<HTMLDivElement>(null);
 
@@ -19,6 +20,7 @@ export default function TopSearchClient() {
     const term = q.trim();
     if (term.length < 2) {
       setSuggest([]);
+      setSelectedIndex(-1);
       return;
     }
     let active = true;
@@ -30,8 +32,12 @@ export default function TopSearchClient() {
         if (!active) return;
         setSuggest(res.items || []);
         setOpen(true);
+        setSelectedIndex(-1);
       } catch {
-        if (active) setSuggest([]);
+        if (active) {
+          setSuggest([]);
+          setSelectedIndex(-1);
+        }
       }
     };
     run();
@@ -96,7 +102,7 @@ export default function TopSearchClient() {
   return (
     <div
       ref={boxRef}
-      style={{ position: "relative", display: "flex", alignItems: "center", gap: 6 }}
+      style={{ position: "relative", display: "flex", alignItems: "center", gap: 8, marginLeft: 40 }}
     >
       <button type="button" onClick={() => history.back()} style={navBtnStyle} title="Back">
         ◀
@@ -109,20 +115,22 @@ export default function TopSearchClient() {
           e.preventDefault();
           submit();
         }}
-        style={{ display: "flex", alignItems: "center", gap: 0 }}
+        style={{ display: "flex", alignItems: "center", gap: 0, position: "relative" }}
       >
         <div style={{ position: "relative" }}>
-          <span
+          <img 
+            src="/search-icon.svg" 
+            alt="Search"
             style={{
               position: "absolute",
               left: 10,
-              top: 5,
-              fontSize: 14,
-              color: theme === "light" ? "#656d76" : "#8b949e",
+              top: 4,
+              width: 20,
+              height: 20,
+              pointerEvents: "none",
+              filter: "brightness(0) saturate(100%) invert(58%) sepia(96%) saturate(1286%) hue-rotate(188deg) brightness(103%) contrast(101%)",
             }}
-          >
-            🔍
-          </span>
+          />
           <input
             aria-label="Search symbol"
             value={q}
@@ -130,46 +138,66 @@ export default function TopSearchClient() {
               setQ(e.target.value);
               setOpen(true);
             }}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setSelectedIndex((prev) => 
+                  prev < suggest.length - 1 ? prev + 1 : prev
+                );
+              } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setSelectedIndex((prev) => (prev > 0 ? prev - 1 : -1));
+              } else if (e.key === "Escape") {
+                setOpen(false);
+                setSelectedIndex(-1);
+              } else if (e.key === "Enter" && selectedIndex >= 0) {
+                e.preventDefault();
+                submit(suggest[selectedIndex].symbol);
+              }
+            }}
             placeholder="Search symbol or company"
             style={{
               background: theme === "light" ? "#ffffff" : "#161b22",
               border: theme === "light" ? "1px solid #d0d7de" : "1px solid #30363d",
-              borderRadius: 20,
-              padding: "4px 14px 4px 30px",
+              borderRadius: 6,
+              padding: "4px 14px 4px 35px",
               fontSize: 12,
               color: theme === "light" ? "#24292f" : "#e6edf3",
-              width: 250,
+              width: 285,
+              height: 19,
               outline: "none",
             }}
           />
         </div>
-      </form>
-      {open && suggest.length > 0 && (
-        <div
-          style={{
-            position: "absolute",
-            top: "100%",
-            left: 52,
-            marginTop: 4,
-            background: theme === "light" ? "#ffffff" : "#161b22",
-            border: theme === "light" ? "1px solid #d0d7de" : "1px solid #30363d",
-            borderRadius: 8,
-            padding: 6,
-            display: "flex",
-            flexDirection: "column",
-            gap: 4,
-            minWidth: 240,
-            zIndex: 50,
-            boxShadow:
-              theme === "light" ? "0 4px 12px rgba(0,0,0,0.15)" : "0 4px 12px rgba(0,0,0,0.4)",
-          }}
-        >
-          {suggest.map((s) => (
+        {open && suggest.length > 0 && (
+          <div
+            style={{
+              position: "absolute",
+              top: "100%",
+              left: 0,
+              marginTop: 4,
+              background: theme === "light" ? "#ffffff" : "#161b22",
+              border: theme === "light" ? "1px solid #d0d7de" : "1px solid #30363d",
+              borderRadius: 8,
+              padding: 6,
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+              width: 320,
+              zIndex: 50,
+              boxShadow:
+                theme === "light" ? "0 4px 12px rgba(0,0,0,0.15)" : "0 4px 12px rgba(0,0,0,0.4)",
+            }}
+          >
+          {suggest.map((s, idx) => (
             <button
               key={s.symbol}
               onClick={() => submit(s.symbol)}
+              onMouseEnter={() => setSelectedIndex(idx)}
               style={{
-                background: "transparent",
+                background: selectedIndex === idx 
+                  ? (theme === "light" ? "#f6f8fa" : "#21262d")
+                  : "transparent",
                 border: "none",
                 textAlign: "left",
                 padding: "6px 6px",
@@ -193,10 +221,11 @@ export default function TopSearchClient() {
             </button>
           ))}
           <div style={{ fontSize: 9, opacity: 0.45, padding: "2px 4px" }}>
-            Enter to open • Esc to close
+            ↑↓ to navigate • Enter to open • Esc to close
           </div>
         </div>
-      )}
+        )}
+      </form>
     </div>
   );
 }

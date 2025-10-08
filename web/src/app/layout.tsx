@@ -101,12 +101,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </div>
               </aside>
               <main
+                className="main-content-scroll"
                 style={{
                   padding: 20,
                   height: "calc(100vh - 40px - 22px)",
                   overflow: "auto",
                   background: "var(--color-bg)",
                   paddingBottom: 40,
+                  scrollbarWidth: "none",
+                  msOverflowStyle: "none",
                 }}
               >
                 <ErrorBoundary>{children}</ErrorBoundary>

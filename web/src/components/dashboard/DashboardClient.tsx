@@ -359,8 +359,15 @@ function AnalyticsPanel({ symbol, holding }: { symbol?: string; holding?: Holdin
   return (
     <div className="panel" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div
-        className="panel-body"
-        style={{ overflow: "auto", display: "flex", flexDirection: "column", gap: 14 }}
+        className="panel-body dashboard-scroll-container"
+        style={{ 
+          overflow: "auto", 
+          display: "flex", 
+          flexDirection: "column", 
+          gap: 14,
+          scrollbarWidth: "none",
+          msOverflowStyle: "none",
+        }}
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <div
@@ -626,7 +633,7 @@ function ChartPanel({
             minWidth: 0,
           }}
         >
-          {/* Logo (attempt Clearbit via stats website domain) will be injected by AnalyticsPanel - fallback here to letter */}
+          {/* Simple letter icon */}
           <div
             style={{
               width: 22,
@@ -925,7 +932,10 @@ function OverviewSection({ stats }: { stats: any }) {
             ? LayoutConfig.OVERVIEW_COLLAPSED_MAX_HEIGHT * S
             : LayoutConfig.OVERVIEW_COLLAPSED_MAX_HEIGHT * S,
           overflow: expanded ? "auto" : "hidden",
+          scrollbarWidth: "none", // Firefox
+          msOverflowStyle: "none", // IE and Edge
         }}
+        className="hide-scrollbar"
       >
         {expanded ? summary : short}
         {!expanded && needsExpansion && (
@@ -1046,6 +1056,7 @@ function NewsSection({
         News {loading && <span style={{ fontSize: 10, opacity: 0.5 }}>loading…</span>}
       </div>
       <div
+        className="news-scroll-container"
         style={{
           display: "flex",
           flexDirection: "column",
@@ -1053,6 +1064,8 @@ function NewsSection({
           fontSize: 12,
           overflowY: "auto",
           maxHeight,
+          scrollbarWidth: "none",
+          msOverflowStyle: "none",
         }}
       >
         {news.map((n) => (
