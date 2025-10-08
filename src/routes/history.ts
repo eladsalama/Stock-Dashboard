@@ -11,7 +11,7 @@ const historyRoutes: FastifyPluginAsync = async (app) => {
       const { symbol } = req.params as { symbol: string };
       const { range = "1m" } = (req.query ?? {}) as { range?: Range };
 
-      const r = (["1d","1w","1m","1y","5y"] as Range[]).includes(range as Range)
+      const r = (["1d", "1w", "1m", "1y", "5y"] as Range[]).includes(range as Range)
         ? (range as Range)
         : "1m";
 
@@ -22,7 +22,7 @@ const historyRoutes: FastifyPluginAsync = async (app) => {
       const series = await fetchHistory(symbol, r);
       await app.redis.set(key, JSON.stringify(series), "EX", TTL[r]);
       return { ...series, cached: false };
-    }
+    },
   );
 };
 

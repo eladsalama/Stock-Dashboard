@@ -18,11 +18,7 @@ export async function fetchYahooQuote(symbol: string): Promise<Quote> {
 
   const q = await yahooFinance.quote(s);
 
-  const price =
-    q.regularMarketPrice ??
-    q.postMarketPrice ??
-    q.preMarketPrice ??
-    null;
+  const price = q.regularMarketPrice ?? q.postMarketPrice ?? q.preMarketPrice ?? null;
   if (price == null) throw new Error("No price available");
 
   // robust timestamp handling (Date | ms | seconds)
@@ -38,9 +34,11 @@ export async function fetchYahooQuote(symbol: string): Promise<Quote> {
     asOf = new Date().toISOString();
   }
 
-  const previousClose = q.regularMarketPreviousClose != null ? Number(q.regularMarketPreviousClose) : undefined;
+  const previousClose =
+    q.regularMarketPreviousClose != null ? Number(q.regularMarketPreviousClose) : undefined;
   const change = previousClose != null ? Number(price) - previousClose : undefined;
-  const changePercent = (change != null && previousClose) ? (change / previousClose) * 100 : undefined;
+  const changePercent =
+    change != null && previousClose ? (change / previousClose) * 100 : undefined;
   return {
     symbol: q.symbol ?? s,
     price: Number(price),

@@ -21,13 +21,13 @@ const devRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // Simple diagnostic logging endpoint (development only)
-  app.post('/v1/dev/sidebar-log', async (req, reply) => {
+  app.post("/v1/dev/sidebar-log", async (req, reply) => {
     try {
       const body = req.body as unknown; // diagnostic pass-through
-      app.log.info({ sidebarDiag: true, body }, 'Sidebar diagnostic event');
+      app.log.info({ sidebarDiag: true, body }, "Sidebar diagnostic event");
       return { ok: true };
     } catch {
-      return reply.code(400).send({ ok:false });
+      return reply.code(400).send({ ok: false });
     }
   });
 };

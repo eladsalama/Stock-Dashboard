@@ -13,7 +13,7 @@ module.exports = [
       "eslint.config.cjs",
       ".next/**",
       "web/.next/**",
-      "web/node_modules/**"
+      "web/node_modules/**",
     ],
   },
   // Apply TypeScript recommended rules to TS files only
@@ -26,6 +26,20 @@ module.exports = [
     rules: {
       "no-console": "off",
       "@typescript-eslint/no-require-imports": "off",
+      // Allow any in auth.ts for Prisma workarounds
+      "@typescript-eslint/no-explicit-any": [
+        "error",
+        {
+          ignoreRestArgs: false,
+          fixToUnknown: false,
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/routes/auth.ts"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
     },
   },
 ];

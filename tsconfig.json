@@ -12,7 +12,15 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "baseUrl": "src",
+    "paths": {
+      "services/*": ["services/*"],
+      "routes/*": ["routes/*"],
+      "plugins/*": ["plugins/*"],
+      "services": ["services/index"],
+      "@/*": ["*"]
+    }
   },
   "include": ["src"]
 }

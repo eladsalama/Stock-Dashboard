@@ -1,7 +1,7 @@
 "use client";
-import React from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import React from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 interface SymbolLinkProps {
   symbol: string;
@@ -37,7 +37,9 @@ export function SymbolLink({ symbol, children, className, style }: SymbolLinkPro
           window.location.href = href;
         }
       }}
-    >{children ?? symbol}</Link>
+    >
+      {children ?? symbol}
+    </Link>
   );
 }
 

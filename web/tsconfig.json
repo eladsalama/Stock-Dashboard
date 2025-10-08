@@ -1,11 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "es2020"
-    ],
+    "lib": ["dom", "dom.iterable", "es2020"],
     "allowJs": false,
     "skipLibCheck": true,
     "strict": true,
@@ -22,9 +18,7 @@
       "@components/*": ["components/*"]
     },
     "jsx": "preserve",
-    "types": [
-      "node"
-    ],
+    "types": ["node"],
     "incremental": true,
     "plugins": [
       {
@@ -41,7 +35,5 @@
     "**/client.d.ts",
     ".next/types/**/*.ts"
   ],
-  "exclude": [
-    "node_modules"
-  ]
+  "exclude": ["node_modules"]
 }

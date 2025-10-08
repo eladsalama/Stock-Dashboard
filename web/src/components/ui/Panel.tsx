@@ -1,5 +1,5 @@
 "use client";
-import React from 'react';
+import React from "react";
 
 interface PanelProps {
   title?: string;
@@ -15,10 +15,12 @@ export function Panel({ title, actions, children, style, bodyStyle }: PanelProps
       {(title || actions) && (
         <div className="panel-header">
           <span>{title}</span>
-          <div style={{ display: 'flex', gap: 6 }}>{actions}</div>
+          <div style={{ display: "flex", gap: 6 }}>{actions}</div>
         </div>
       )}
-      <div className="panel-body" style={bodyStyle}>{children}</div>
+      <div className="panel-body" style={bodyStyle}>
+        {children}
+      </div>
     </div>
   );
 }

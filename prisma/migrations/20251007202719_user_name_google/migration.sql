@@ -1,0 +1,4 @@
+-- NO-OP MIGRATION
+-- This migration originally attempted to create the index "User_googleSub_key" a second time
+-- after it was already created (as a partial index) in 20251007130000_user_name_google.
+-- Leaving it empty avoids duplicate index error (42P07) during migrate reset.

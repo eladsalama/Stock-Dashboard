@@ -14,9 +14,7 @@ async function main() {
       name: "Demo Portfolio",
       baseCcy: "USD",
       positions: {
-        create: [
-          { symbol: "AAPL", quantity: 10.0, avgCost: 150.0 },
-        ],
+        create: [{ symbol: "AAPL", quantity: 10.0, avgCost: 150.0 }],
       },
     },
     include: { positions: true },

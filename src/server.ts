@@ -1,4 +1,6 @@
 import Fastify from "fastify";
+import { randomUUID } from "crypto";
+import type { FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
 import { env, loadDotEnv } from "./env";
 import prismaPlugin from "./plugins/prisma";
@@ -10,27 +12,47 @@ import portfoliosRoutes from "./routes/portfolios";
 import uploadsRoutes from "./routes/uploads";
 import devRoutes from "./routes/dev";
 import awsDevPlugin from "./plugins/aws-dev";
+import authPlugin from "./plugins/auth";
+import authRoutes from "routes/auth";
 
 loadDotEnv();
+
+function getGitHash(): string | undefined {
+  return (
+    process.env.GIT_HASH || process.env.VERCEL_GIT_COMMIT_SHA || process.env.COMMIT_SHA || undefined
+  );
+}
 
 export async function buildServer() {
   const app = Fastify({
     logger: { level: env.LOG_LEVEL },
   });
 
+  // Request ID middleware (adds x-request-id header + logger child)
+  app.addHook("onRequest", async (req, reply) => {
+    const incoming = req.headers["x-request-id"];
+    const id = typeof incoming === "string" && incoming.trim() ? incoming : randomUUID();
+    (req as FastifyRequest & { requestId: string }).requestId = id; // annotate request
+    reply.header("x-request-id", id);
+    req.log = req.log.child({ requestId: id });
+  });
+
   await app.register(cors, {
     origin: env.CORS_ORIGIN,
-    methods: ['GET','POST','PATCH','DELETE','OPTIONS'],
-    allowedHeaders: ['Content-Type'],
+    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-request-id"],
+    credentials: true,
   });
   await app.register(prismaPlugin);
   await app.register(rateLimit, { global: false }); // we'll enable per-route
   await app.register(redisPlugin);
+  await app.register(authPlugin);
+  await app.register(authRoutes);
   // Dev-only LocalStack wiring (safe no-op in production)
   await app.register(awsDevPlugin);
 
   // Support CSV uploads (import positions) - Fastify returns 415 if no parser
-  app.addContentTypeParser('text/csv', { parseAs: 'string' }, (req, body, done) => {
+  app.addContentTypeParser("text/csv", { parseAs: "string" }, (req, body, done) => {
     done(null, body);
   });
 
@@ -41,6 +63,11 @@ export async function buildServer() {
   await app.register(devRoutes);
 
   app.get("/healthz", async () => ({ ok: true }));
+  app.get("/version", async () => ({
+    version: getGitHash() || "dev",
+    node: process.version,
+    ts: Date.now(),
+  }));
 
   app.register(async (instance) => {
     instance.get("/v1/hello", async () => ({ message: "Stock Dashboard API v1" }));

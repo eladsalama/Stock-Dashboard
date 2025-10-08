@@ -21,10 +21,21 @@ export async function ingestCsvFromS3(portfolioId: string, key: string, prisma: 
 }
 
 // Shared core ingest for already-fetched CSV content (used by tests & S3 path)
-export async function ingestCsvText(portfolioId: string, key: string, csvText: string, prisma: PrismaClient) {
+export async function ingestCsvText(
+  portfolioId: string,
+  key: string,
+  csvText: string,
+  prisma: PrismaClient,
+) {
   // Using raw SQL pending prisma client model availability (ingestRun)
   const runId = crypto.randomUUID();
-  await prisma.$executeRawUnsafe('INSERT INTO "IngestRun" (id, "portfolioId", "objectKey", status) VALUES ($1,$2,$3,$4)', runId, portfolioId, key, 'pending');
+  await prisma.$executeRawUnsafe(
+    'INSERT INTO "IngestRun" (id, "portfolioId", "objectKey", status) VALUES ($1,$2,$3,$4)',
+    runId,
+    portfolioId,
+    key,
+    "pending",
+  );
   const rows = parseCsv(csvText);
   try {
     const result = await ingestRows(portfolioId, rows, prisma);
@@ -33,22 +44,22 @@ export async function ingestCsvText(portfolioId: string, key: string, csvText: s
     }
     await prisma.$executeRawUnsafe(
       'UPDATE "IngestRun" SET status=$1, "rowsOk"=$2, "rowsFailed"=$3, "finishedAt"=$4 WHERE id=$5',
-      'ok',
+      "ok",
       result.inserted,
       rows.length - result.inserted,
       new Date(),
-      runId
+      runId,
     );
     return result;
   } catch (err) {
     await prisma.$executeRawUnsafe(
       'UPDATE "IngestRun" SET status=$1, "errorMessage"=$2, "rowsOk"=$3, "rowsFailed"=$4, "finishedAt"=$5 WHERE id=$6',
-      'error',
+      "error",
       String(err),
       0,
       rows.length,
       new Date(),
-      runId
+      runId,
     );
     throw err;
   }

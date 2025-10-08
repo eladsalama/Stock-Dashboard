@@ -15,7 +15,9 @@ describe("ingestion", () => {
       update: {},
       create: { email: "test@example.local" },
     });
-    const p = await prisma.portfolio.create({ data: { userId: user.id, name: "Test", baseCcy: "USD" } });
+    const p = await prisma.portfolio.create({
+      data: { userId: user.id, name: "Test", baseCcy: "USD" },
+    });
     portfolioId = p.id;
   });
 
@@ -24,15 +26,29 @@ describe("ingestion", () => {
   });
 
   it("parses CSV rows", () => {
-    const csv = "symbol,side,qty,price,tradedAt,externalId\nAAPL,BUY,10,150,2024-01-05T15:30:00Z,trade-001";
+    const csv =
+      "symbol,side,qty,price,tradedAt,externalId\nAAPL,BUY,10,150,2024-01-05T15:30:00Z,trade-001";
     const rows = parseCsv(csv);
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ symbol: "AAPL", side: "BUY", qty: 10, price: 150, externalId: "trade-001" });
+    expect(rows[0]).toMatchObject({
+      symbol: "AAPL",
+      side: "BUY",
+      qty: 10,
+      price: 150,
+      externalId: "trade-001",
+    });
   });
 
   it("upserts idempotently by externalId", async () => {
     const rows: Row[] = [
-      { symbol: "AAPL", side: "BUY", qty: 10, price: 150, tradedAt: "2024-01-05T15:30:00Z", externalId: "idemp-1" },
+      {
+        symbol: "AAPL",
+        side: "BUY",
+        qty: 10,
+        price: 150,
+        tradedAt: "2024-01-05T15:30:00Z",
+        externalId: "idemp-1",
+      },
     ];
     const r1 = await ingestRows(portfolioId, rows, prisma);
     const r2 = await ingestRows(portfolioId, rows, prisma); // same externalId

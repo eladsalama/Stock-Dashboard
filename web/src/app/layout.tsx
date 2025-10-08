@@ -1,21 +1,27 @@
-import './globals.css';
-import React from 'react';
-import FallbackLink from '@components/ui/FallbackLink';
-const WatchlistClient = dynamic(() => import('./watchlist-client'), { ssr: false });
+import "./globals.css";
+import React from "react";
+import dynamic from "next/dynamic";
+import FallbackLink from "@components/ui/FallbackLink";
+import { ToastProvider } from "@components/ui/toast";
+import SidebarHeaderClient from "./sidebar-header-client";
+import { AuthProvider } from "@components/auth-context/AuthContext";
+import { UserMenu } from "@components/auth-context/UserMenu";
+import { ErrorBoundary } from "@components/ui/ErrorBoundary";
+
+// Dynamic imports (must come after dynamic is imported)
+const WatchlistClient = dynamic(() => import("./watchlist-client"), { ssr: false });
 // Use purely client-side sidebar for stability across navigations
-const SidebarPortfolios = dynamic(() => import('./sidebar-portfolios-client'), { ssr: false });
-import { ToastProvider } from '@components/ui/toast';
-import dynamic from 'next/dynamic';
-const TopSearchClient = dynamic(()=>import('./top-search-client'), { ssr:false });
-import SidebarHeaderClient from './sidebar-header-client';
-const StatusStrip = dynamic(() => import('@components/ui/StatusStrip'), { ssr:false });
+const SidebarPortfolios = dynamic(() => import("./sidebar-portfolios-client"), { ssr: false });
+const TopSearchClient = dynamic(() => import("./top-search-client"), { ssr: false });
+const StatusStrip = dynamic(() => import("@components/ui/StatusStrip"), { ssr: false });
 
 export const metadata = {
-  title: 'Stock Dashboard',
-  description: 'Internal portfolio & trade ingestion dashboard'
+  title: "Stock Dashboard",
+  description: "Internal portfolio & trade ingestion dashboard",
 };
 
-const preloadPortfoliosScript = `(() => { try { const el = document.getElementById('sidebar-portfolios-preload'); if(!el) return; const raw = localStorage.getItem('sidebar.portfolios.cache'); if(!raw) return; const list = JSON.parse(raw); if(!Array.isArray(list) || !list.length) return; const esc = s => String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c])); let out=''; for (let i=0;i<list.length && i<40;i++){ const p=list[i]; if(!p||!p.id) continue; out += '<div class="sidebar-preload-item">'+ esc(p.name||'Portfolio') +'</div>'; } el.innerHTML = out; } catch(e) {} })();`;
+// Updated to use new cache key 'sidebar.portfolios.cache.v2'
+const preloadPortfoliosScript = `(() => { try { const el = document.getElementById('sidebar-portfolios-preload'); if(!el) return; const raw = localStorage.getItem('sidebar.portfolios.cache.v2'); if(!raw) return; const list = JSON.parse(raw); if(!Array.isArray(list) || !list.length) return; const esc = s => String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c])); let out=''; for (let i=0;i<list.length && i<40;i++){ const p=list[i]; if(!p||!p.id) continue; out += '<div class="sidebar-preload-item">'+ esc(p.name||'Portfolio') +'</div>'; } el.innerHTML = out; } catch(e) {} })();`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const globalErrorTrap = `(() => {
@@ -37,40 +43,78 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   })();`;
   return (
     <html lang="en">
-      <body style={{ fontFamily: 'system-ui, sans-serif' }}>
-        <ToastProvider>
-          <script dangerouslySetInnerHTML={{ __html: globalErrorTrap }} />
-          <div className="top-bar">
-            <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-              <FallbackLink href="/" style={{ fontWeight:600, textDecoration:'none', color:'inherit', cursor:'pointer' }}>📈 Stock Dashboard</FallbackLink>
-              <span className="status-pill">API: live</span>
-              <TopSearchClient />
+      <body style={{ fontFamily: "system-ui, sans-serif" }}>
+        <AuthProvider>
+          <ToastProvider>
+            <script dangerouslySetInnerHTML={{ __html: globalErrorTrap }} />
+            <div className="top-bar">
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <FallbackLink
+                  href="/"
+                  style={{
+                    fontWeight: 600,
+                    textDecoration: "none",
+                    color: "inherit",
+                    cursor: "pointer",
+                  }}
+                >
+                  📈 Stock Dashboard
+                </FallbackLink>
+                <span className="status-pill">API: live</span>
+                <TopSearchClient />
+              </div>
+              <div style={{ fontSize: 12, opacity: 0.9 }}>
+                <UserMenu />
+              </div>
             </div>
-            <div style={{ fontSize:12, opacity:0.7 }}>Desktop Mode</div>
-          </div>
-          <div className="app-frame" style={{ paddingBottom:22 }}>
-            <aside className="sidebar">
-              <div className="sidebar-header">
-                <SidebarHeaderClient />
-              </div>
-              <div id="sidebar-portfolios-preload" style={{ display:'flex', flexDirection:'column', gap:4 }} />
-              <script dangerouslySetInnerHTML={{ __html: preloadPortfoliosScript }} />
-              <div className="sidebar-section" style={{ display:'flex', flexDirection:'column', gap:4 }}>
-                <SidebarPortfolios />
-              </div>
-              <div className="sidebar-section" style={{ fontSize:12, display:'flex', flexDirection:'column', gap:6, borderTop:'1px solid var(--color-border)', paddingTop:6 }}>
-                <WatchlistClient />
-              </div>
-              <div style={{ marginTop:'auto', padding: '8px 10px', fontSize:10, opacity:0.5 }}>
-                Build {new Date().getFullYear()}
-              </div>
-            </aside>
-            <main style={{ padding:20, height:'calc(100vh - 40px - 22px)', overflow:'hidden' }}>
-              {children}
-            </main>
-          </div>
-          <StatusStrip />
-        </ToastProvider>
+            <div className="app-frame" style={{ paddingBottom: 22, position: "relative" }}>
+              <aside className="sidebar">
+                <div className="sidebar-header">
+                  <SidebarHeaderClient />
+                </div>
+                <div
+                  id="sidebar-portfolios-preload"
+                  style={{ display: "flex", flexDirection: "column", gap: 4 }}
+                />
+                <script dangerouslySetInnerHTML={{ __html: preloadPortfoliosScript }} />
+                <div
+                  className="sidebar-section"
+                  style={{ display: "flex", flexDirection: "column", gap: 4 }}
+                >
+                  <SidebarPortfolios />
+                </div>
+                <div
+                  className="sidebar-section"
+                  style={{
+                    fontSize: 12,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 6,
+                    borderTop: "1px solid var(--color-border)",
+                    paddingTop: 6,
+                  }}
+                >
+                  <WatchlistClient />
+                </div>
+                <div style={{ marginTop: "auto", padding: "8px 10px", fontSize: 10, opacity: 0.5 }}>
+                  Build {new Date().getFullYear()}
+                </div>
+              </aside>
+              <main
+                style={{
+                  padding: 20,
+                  height: "calc(100vh - 40px - 22px)",
+                  overflow: "auto",
+                  background: "var(--color-bg)",
+                  paddingBottom: 40,
+                }}
+              >
+                <ErrorBoundary>{children}</ErrorBoundary>
+              </main>
+            </div>
+            <StatusStrip />
+          </ToastProvider>
+        </AuthProvider>
       </body>
     </html>
   );

@@ -4,9 +4,14 @@ export type RecomputeResult = { updated: number; deleted: number };
 
 // Recompute positions from all trades for a portfolio.
 // Net quantity can go negative (short). Positions with net 0 are removed.
-export async function recomputePositions(portfolioId: string, prisma: PrismaClient): Promise<RecomputeResult> {
+export async function recomputePositions(
+  portfolioId: string,
+  prisma: PrismaClient,
+): Promise<RecomputeResult> {
   // Aggregate trades in SQL for accuracy & scale
-  const rows = await prisma.$queryRaw<Array<{ symbol: string; qty: string; buyQty: string; buyCost: string }>>`
+  const rows = await prisma.$queryRaw<
+    Array<{ symbol: string; qty: string; buyQty: string; buyCost: string }>
+  >`
     SELECT
       t.symbol as symbol,
       SUM(CASE WHEN t.side = 'BUY' THEN t.qty ELSE -t.qty END) as qty,
@@ -31,9 +36,19 @@ export async function recomputePositions(portfolioId: string, prisma: PrismaClie
     // Upsert using find + create/update (to avoid composite alias mismatch issues)
     const existing = await prisma.position.findFirst({ where: { portfolioId, symbol: r.symbol } });
     if (existing) {
-      await prisma.position.update({ where: { id: existing.id }, data: { quantity: netQty.toString(), avgCost: avgCost.toString() } });
+      await prisma.position.update({
+        where: { id: existing.id },
+        data: { quantity: netQty.toString(), avgCost: avgCost.toString() },
+      });
     } else {
-      await prisma.position.create({ data: { portfolioId, symbol: r.symbol, quantity: netQty.toString(), avgCost: avgCost.toString() } });
+      await prisma.position.create({
+        data: {
+          portfolioId,
+          symbol: r.symbol,
+          quantity: netQty.toString(),
+          avgCost: avgCost.toString(),
+        },
+      });
     }
     updated++;
   }
@@ -45,8 +60,8 @@ export async function recomputePositions(portfolioId: string, prisma: PrismaClie
 
   // Also delete any position whose symbol not in current aggregate (i.e., all trades deleted scenario)
   const currentSymbols = rows
-    .filter((r: { symbol:string; qty:string }) => Number(r.qty) !== 0)
-    .map((r: { symbol:string; qty:string }) => r.symbol);
+    .filter((r: { symbol: string; qty: string }) => Number(r.qty) !== 0)
+    .map((r: { symbol: string; qty: string }) => r.symbol);
   await prisma.position.deleteMany({
     where: { portfolioId, NOT: currentSymbols.length ? { symbol: { in: currentSymbols } } : {} },
   });

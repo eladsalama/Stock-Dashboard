@@ -1,1 +1,1 @@
-export { default } from '../sidebar-portfolios-client';
+export { default } from "../sidebar-portfolios-client";

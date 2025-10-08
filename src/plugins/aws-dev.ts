@@ -1,6 +1,16 @@
 import fp from "fastify-plugin";
-import { S3Client, CreateBucketCommand, PutBucketNotificationConfigurationCommand, PutBucketCorsCommand } from "@aws-sdk/client-s3";
-import { SQSClient, CreateQueueCommand, GetQueueAttributesCommand, SetQueueAttributesCommand } from "@aws-sdk/client-sqs";
+import {
+  S3Client,
+  CreateBucketCommand,
+  PutBucketNotificationConfigurationCommand,
+  PutBucketCorsCommand,
+} from "@aws-sdk/client-s3";
+import {
+  SQSClient,
+  CreateQueueCommand,
+  GetQueueAttributesCommand,
+  SetQueueAttributesCommand,
+} from "@aws-sdk/client-sqs";
 
 const REGION = process.env.AWS_REGION || "us-east-1";
 const ENDPOINT = process.env.AWS_ENDPOINT_URL || "http://localhost:4566";
@@ -12,8 +22,17 @@ export default fp(async (app) => {
   // Dev-only: initialize LocalStack S3 bucket + SQS queue and link notification
   if (process.env.NODE_ENV === "production") return;
 
-  const s3 = new S3Client({ region: REGION, endpoint: ENDPOINT, forcePathStyle: true, credentials: { accessKeyId: "test", secretAccessKey: "test" } });
-  const sqs = new SQSClient({ region: REGION, endpoint: ENDPOINT, credentials: { accessKeyId: "test", secretAccessKey: "test" } });
+  const s3 = new S3Client({
+    region: REGION,
+    endpoint: ENDPOINT,
+    forcePathStyle: true,
+    credentials: { accessKeyId: "test", secretAccessKey: "test" },
+  });
+  const sqs = new SQSClient({
+    region: REGION,
+    endpoint: ENDPOINT,
+    credentials: { accessKeyId: "test", secretAccessKey: "test" },
+  });
 
   app.addHook("onReady", async () => {
     try {
@@ -21,23 +40,25 @@ export default fp(async (app) => {
       await s3.send(new CreateBucketCommand({ Bucket: TRADES_BUCKET }));
       // Ensure permissive CORS so browser presigned PUT from Next.js works
       try {
-        await s3.send(new PutBucketCorsCommand({
-          Bucket: TRADES_BUCKET,
-          CORSConfiguration: {
-            CORSRules: [
-              {
-                AllowedHeaders: ['*'],
-                AllowedMethods: ['GET','PUT','HEAD','POST','DELETE'],
-                AllowedOrigins: ['*'],
-                ExposeHeaders: ['ETag'],
-                MaxAgeSeconds: 3000
-              }
-            ]
-          }
-        }));
-        app.log.info({ bucket: TRADES_BUCKET }, 'Applied S3 CORS configuration');
+        await s3.send(
+          new PutBucketCorsCommand({
+            Bucket: TRADES_BUCKET,
+            CORSConfiguration: {
+              CORSRules: [
+                {
+                  AllowedHeaders: ["*"],
+                  AllowedMethods: ["GET", "PUT", "HEAD", "POST", "DELETE"],
+                  AllowedOrigins: ["*"],
+                  ExposeHeaders: ["ETag"],
+                  MaxAgeSeconds: 3000,
+                },
+              ],
+            },
+          }),
+        );
+        app.log.info({ bucket: TRADES_BUCKET }, "Applied S3 CORS configuration");
       } catch (e) {
-        app.log.debug({ e }, 'failed to apply bucket CORS (may already exist)');
+        app.log.debug({ e }, "failed to apply bucket CORS (may already exist)");
       }
     } catch (e) {
       app.log.debug({ e }, "bucket may already exist");
@@ -59,7 +80,12 @@ export default fp(async (app) => {
     }
 
     if (!queueUrl) {
-      await sqs.send(new GetQueueAttributesCommand({ QueueUrl: `${ENDPOINT}/000000000000/${TRADES_QUEUE}`, AttributeNames: ["QueueArn"] }));
+      await sqs.send(
+        new GetQueueAttributesCommand({
+          QueueUrl: `${ENDPOINT}/000000000000/${TRADES_QUEUE}`,
+          AttributeNames: ["QueueArn"],
+        }),
+      );
       queueUrl = `${ENDPOINT}/000000000000/${TRADES_QUEUE}`;
     }
 
@@ -84,31 +110,38 @@ export default fp(async (app) => {
           },
         ],
       };
-      await sqs.send(new SetQueueAttributesCommand({
-        QueueUrl: queueUrl,
-        Attributes: { Policy: JSON.stringify(policy) },
-      }));
+      await sqs.send(
+        new SetQueueAttributesCommand({
+          QueueUrl: queueUrl,
+          Attributes: { Policy: JSON.stringify(policy) },
+        }),
+      );
     } catch (e) {
       app.log.debug({ e }, "set queue policy failed (ok to ignore in LocalStack)");
     }
 
     // Configure S3 -> SQS notification for prefix trades/
     try {
-      await s3.send(new PutBucketNotificationConfigurationCommand({
-        Bucket: TRADES_BUCKET,
-        NotificationConfiguration: {
-          QueueConfigurations: [
-            {
-              Events: ["s3:ObjectCreated:Put"],
-              QueueArn: queueArn,
-              Filter: {
-                Key: { FilterRules: [{ Name: "prefix", Value: "trades/" }] },
+      await s3.send(
+        new PutBucketNotificationConfigurationCommand({
+          Bucket: TRADES_BUCKET,
+          NotificationConfiguration: {
+            QueueConfigurations: [
+              {
+                Events: ["s3:ObjectCreated:Put"],
+                QueueArn: queueArn,
+                Filter: {
+                  Key: { FilterRules: [{ Name: "prefix", Value: "trades/" }] },
+                },
               },
-            },
-          ],
-        },
-      }));
-      app.log.info({ bucket: TRADES_BUCKET, queue: TRADES_QUEUE }, "S3 notifications wired for trades/ prefix");
+            ],
+          },
+        }),
+      );
+      app.log.info(
+        { bucket: TRADES_BUCKET, queue: TRADES_QUEUE },
+        "S3 notifications wired for trades/ prefix",
+      );
     } catch (e) {
       app.log.debug({ e }, "notification config may already exist");
     }

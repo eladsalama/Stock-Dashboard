@@ -10,6 +10,11 @@ datasource db {
 model User {
   id         String      @id @default(cuid())
   email      String      @unique
+  cognitoSub String?     @unique
+  googleSub  String?     @unique
+  name       String?
+  passwordHash String?   // for classic email+password accounts (nullable if using only social login)
+  themePreference String? // 'light' | 'dark'
   createdAt  DateTime    @default(now())
   portfolios Portfolio[]
 }
