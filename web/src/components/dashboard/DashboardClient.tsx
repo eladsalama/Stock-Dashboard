@@ -70,26 +70,35 @@ export default function DashboardClient({ portfolio, initialSymbol, starInitialS
     const stored = localStorage.getItem("dash.chart.mode");
     return stored === "candles" ? "candles" : "line";
   });
-  const [showSMA20, setShowSMA20] = useState<boolean>(
-    () => localStorage?.getItem("dash.sma20") === "1",
-  );
-  const [showSMA50, setShowSMA50] = useState<boolean>(
-    () => localStorage?.getItem("dash.sma50") === "1",
-  );
   // Log scale removed from UI per request; keep internal false constant
   const logScale = false;
   const [showVolMA, setShowVolMA] = useState<boolean>(
     () => localStorage?.getItem("dash.volma") === "1",
   );
-  useEffect(() => {
-    localStorage.setItem("dash.sma20", showSMA20 ? "1" : "0");
-  }, [showSMA20]);
-  useEffect(() => {
-    localStorage.setItem("dash.sma50", showSMA50 ? "1" : "0");
-  }, [showSMA50]);
+  const [showBollingerBands, setShowBollingerBands] = useState<boolean>(
+    () => localStorage?.getItem("dash.bb") === "1",
+  );
+  const [showEMA20, setShowEMA20] = useState<boolean>(
+    () => localStorage?.getItem("dash.ema20") === "1",
+  );
   useEffect(() => {
     localStorage.setItem("dash.volma", showVolMA ? "1" : "0");
   }, [showVolMA]);
+  useEffect(() => {
+    localStorage.setItem("dash.bb", showBollingerBands ? "1" : "0");
+  }, [showBollingerBands]);
+  useEffect(() => {
+    localStorage.setItem("dash.ema20", showEMA20 ? "1" : "0");
+  }, [showEMA20]);
+
+  // Reset function to turn off all indicators
+  const resetIndicators = () => {
+    setShowEMA20(false);
+    setShowVolMA(false);
+    setShowBollingerBands(false);
+    // Also reset chart zoom
+    window.dispatchEvent(new CustomEvent("chart-reset"));
+  };
   useEffect(() => {
     localStorage.setItem("dash.chart.mode", chartMode);
   }, [chartMode]);
@@ -140,7 +149,32 @@ export default function DashboardClient({ portfolio, initialSymbol, starInitialS
   useEffect(() => {
     if (!selected) return;
     if (fetchTimer.current) clearTimeout(fetchTimer.current);
-    const key = `${selected}:${range}`;
+    
+    // Data-driven fetch strategy: request exactly what user selected
+    function getOptimalFetchRange(requestedRange: string): string {
+      // Request the exact range - let backend handle it
+      switch (requestedRange) {
+        case "1d":
+          return "1d";
+        case "1w":
+          return "1w";
+        case "1m":
+          return "1m";
+        case "3m":
+          return "3m";
+        case "1y":
+          return "1y";
+        case "5y":
+          return "5y";
+        default:
+          return "1m"; // fallback
+      }
+    }
+    
+    const fetchRange = getOptimalFetchRange(range);
+    console.log(`Fetch debug: requested="${range}", calculated fetchRange="${fetchRange}"`);
+    const key = `${selected}:${fetchRange}`;
+    
     // Serve from cache immediately if available
     const cached = cacheRef.current.get(key);
     if (cached) setCandles(cached);
@@ -148,7 +182,7 @@ export default function DashboardClient({ portfolio, initialSymbol, starInitialS
       const myId = ++inflightId.current;
       setLoadingChart(true);
       try {
-        const h = await api.history(selected, range);
+        const h = await api.history(selected, fetchRange);
         if (inflightId.current !== myId) return; // out-of-date response
         const mapped = h.candles.map((c) => ({ t: c.t, o: c.o, h: c.h, l: c.l, c: c.c, v: c.v }));
         cacheRef.current.set(key, mapped);
@@ -165,7 +199,7 @@ export default function DashboardClient({ portfolio, initialSymbol, starInitialS
     return () => {
       if (fetchTimer.current) clearTimeout(fetchTimer.current);
     };
-  }, [selected, range]);
+  }, [selected, range]); // Restore range dependency since we now fetch different amounts
 
   // Aggregates retained for potential future metrics panel extensions (currently not rendered)
   // const aggregateMV = holdings.reduce((a,h)=> a + (h.marketValue || 0), 0);
@@ -214,13 +248,14 @@ export default function DashboardClient({ portfolio, initialSymbol, starInitialS
           loading={loadingChart}
           mode={chartMode}
           onToggleMode={() => setChartMode((m) => (m === "line" ? "candles" : "line"))}
-          showSMA20={showSMA20}
-          showSMA50={showSMA50}
           logScale={logScale}
           showVolMA={showVolMA}
-          toggleSMA20={() => setShowSMA20((v) => !v)}
-          toggleSMA50={() => setShowSMA50((v) => !v)}
+          showBollingerBands={showBollingerBands}
+          showEMA20={showEMA20}
           toggleVolMA={() => setShowVolMA((v) => !v)}
+          toggleBollingerBands={() => setShowBollingerBands((v) => !v)}
+          toggleEMA20={() => setShowEMA20((v) => !v)}
+          resetIndicators={resetIndicators}
           starInitialState={starInitialState}
         />
         {error && <div style={{ fontSize: 12, color: "var(--color-danger)" }}>Error: {error}</div>}
@@ -460,13 +495,14 @@ function ChartPanel({
   loading,
   mode,
   onToggleMode,
-  showSMA20,
-  showSMA50,
   logScale,
   showVolMA,
-  toggleSMA20,
-  toggleSMA50,
+  showBollingerBands,
+  showEMA20,
   toggleVolMA,
+  toggleBollingerBands,
+  toggleEMA20,
+  resetIndicators,
   starInitialState,
 }: {
   symbol: string;
@@ -477,13 +513,14 @@ function ChartPanel({
   loading: boolean;
   mode: "line" | "candles";
   onToggleMode: () => void;
-  showSMA20: boolean;
-  showSMA50: boolean;
   logScale: boolean;
   showVolMA: boolean;
-  toggleSMA20: () => void;
-  toggleSMA50: () => void;
+  showBollingerBands: boolean;
+  showEMA20: boolean;
   toggleVolMA: () => void;
+  toggleBollingerBands: () => void;
+  toggleEMA20: () => void;
+  resetIndicators: () => void;
   starInitialState?: boolean;
 }) {
   const { theme, user, token } = useAuth();
@@ -652,6 +689,7 @@ function ChartPanel({
           )}
         </div>
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+          {/* Line/Candles */}
           <button
             onClick={onToggleMode}
             className="inline-btn"
@@ -662,24 +700,19 @@ function ChartPanel({
           >
             {mode === "candles" ? "Candles" : "Line"}
           </button>
+          
+          {/* EMA */}
           <button
-            onClick={toggleSMA20}
+            onClick={toggleEMA20}
             className="inline-btn"
             style={
-              showSMA20 ? { background: "var(--color-bg-hover)", color: "#e0b341" } : undefined
+              showEMA20 ? { background: "var(--color-bg-hover)", color: "#ff9500" } : undefined
             }
           >
-            SMA20
+            EMA20
           </button>
-          <button
-            onClick={toggleSMA50}
-            className="inline-btn"
-            style={
-              showSMA50 ? { background: "var(--color-bg-hover)", color: "#b65bff" } : undefined
-            }
-          >
-            SMA50
-          </button>
+          
+          {/* VolMA */}
           <button
             onClick={toggleVolMA}
             className="inline-btn"
@@ -689,8 +722,21 @@ function ChartPanel({
           >
             VolMA
           </button>
+          
+          {/* Bollinger Bands */}
           <button
-            onClick={() => window.dispatchEvent(new CustomEvent("chart-reset"))}
+            onClick={toggleBollingerBands}
+            className="inline-btn"
+            style={
+              showBollingerBands ? { background: "var(--color-bg-hover)", color: "#87ceeb" } : undefined
+            }
+          >
+            Bollinger Bands
+          </button>
+          
+          {/* Reset */}
+          <button
+            onClick={resetIndicators}
             className="inline-btn"
           >
             Reset
@@ -755,10 +801,10 @@ function ChartPanel({
               data={candles}
               mode={mode}
               range={range}
-              showSMA20={showSMA20}
-              showSMA50={showSMA50}
               logScale={logScale}
               showVolMA={showVolMA}
+              showBollingerBands={showBollingerBands}
+              showEMA20={showEMA20}
             />
           )}
           {!loading && candles.length === 0 && (
@@ -845,10 +891,15 @@ function InfoItem({ label, value }: { label: string; value: React.ReactNode }) {
 function OverviewSection({ stats }: { stats: any }) {
   const [expanded, setExpanded] = useState(false);
   const summary: string = stats.longBusinessSummary || "—";
-  const lines = summary.split(/\r?\n/).join(" ").split(". ").filter(Boolean);
-  const collapsedCount = Math.max(1, LayoutConfig.OVERVIEW_COLLAPSED_SENTENCES || 2);
-  const shortSentences = lines.slice(0, collapsedCount);
-  const short = shortSentences.join(". ") + (lines.length > collapsedCount ? "." : "");
+  
+  // Split into words and take first N words for collapsed view
+  const words = summary.split(/\s+/);
+  const wordLimit = LayoutConfig.OVERVIEW_WORD_LIMIT;
+  const short = words.length > wordLimit 
+    ? words.slice(0, wordLimit).join(" ") 
+    : summary;
+  const needsExpansion = words.length > wordLimit;
+  
   return (
     <div
       className="panel"
@@ -877,7 +928,7 @@ function OverviewSection({ stats }: { stats: any }) {
         }}
       >
         {expanded ? summary : short}
-        {!expanded && lines.length > collapsedCount && (
+        {!expanded && needsExpansion && (
           <button
             onClick={() => setExpanded(true)}
             className="inline-btn"

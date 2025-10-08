@@ -27,6 +27,7 @@ export const LayoutConfig = {
   OVERVIEW_VALUE_FONT_SIZE: 10, // font size for overview values
   OVERVIEW_URL_INTERNAL_GAP: 0, // vertical gap inside URL block between placeholder and value
   OVERVIEW_COLLAPSED_SENTENCES: 1, // how many sentences to show when collapsed
+  OVERVIEW_WORD_LIMIT: 15, // number of words to show in collapsed overview
 
   // Stats header typography
   STATS_HEADER_NAME_FONT_SIZE: 14,
@@ -44,6 +45,10 @@ export const LayoutConfig = {
   AXIS_RIGHT_GUTTER: 70,
   AXIS_FOOTER_HEIGHT: 16,
   AXIS_Y_LABEL_X_OFFSET: 4,
-  LAST_PRICE_LABEL_WIDTH: 62,
-  LAST_PRICE_LABEL_HEIGHT: 18,
+  LAST_PRICE_LABEL_WIDTH: 50,
+  LAST_PRICE_LABEL_HEIGHT: 12,
+  LAST_PRICE_LABEL_FONT_SIZE: 10,
+  INDICATOR_LABEL_WIDTH: 50, // width for indicator labels (EMA20, BB)
+  INDICATOR_LABEL_HEIGHT: 12, // height for indicator labels
+  INDICATOR_LABEL_FONT_SIZE: 9, // font size for indicator labels
 };

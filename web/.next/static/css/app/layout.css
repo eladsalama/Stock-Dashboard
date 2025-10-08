@@ -188,8 +188,8 @@ table.data-table tbody tr:hover {
   background: #161b22;
   border: 1px solid var(--color-border);
   color: #7d8590;
-  font-size: 11px;
-  padding: 2px 6px;
+  font-size: 12px;
+  padding: 6px 10px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   line-height: 1;

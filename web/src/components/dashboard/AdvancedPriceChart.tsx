@@ -16,40 +16,51 @@ interface Props {
   data: Candle[];
   mode: "line" | "candles";
   range: RangeKey;
-  showSMA20: boolean;
-  showSMA50: boolean;
   logScale: boolean;
   showVolMA: boolean;
+  showBollingerBands?: boolean;
+  showEMA20?: boolean;
+  symbol?: string; // optional symbol to self-fetch from Yahoo if data not provided
 }
 
 export default function AdvancedPriceChart({
   data,
   mode,
   range,
-  showSMA20,
-  showSMA50,
   logScale,
   showVolMA,
+  showBollingerBands = false,
+  showEMA20 = false,
+  symbol,
 }: Props) {
   const { theme } = useAuth();
   const [hover, setHover] = React.useState<number | null>(null);
-  const [windowIdx, setWindowIdx] = React.useState<[number, number]>(() => [0, data.length - 1]);
-  useEffect(() => {
-    function reset() {
-      setWindowIdx([0, data.length - 1]);
-    }
-    window.addEventListener("chart-reset", reset as EventListener);
-    return () => window.removeEventListener("chart-reset", reset as EventListener);
-  }, [data.length]);
+
+  // Note: symbol prop defined but not used - chart is data-driven from parent's data prop
+  // Parent (DashboardClient) handles all data fetching via api.history()
+  // Backend already fetches the correct range, so we use sourceData directly
+
+  const sourceData: Candle[] = data || [];
+  
   const TARGET_PER_RANGE: Record<RangeKey, number> = {
     "1d": 18,
     "1w": 40,
     "1m": 70,
+    "3m": 90,
     "1y": 140,
     "5y": 220,
   };
   const target = TARGET_PER_RANGE[range] || 120;
-  const bucketSize = data.length > target ? Math.ceil(data.length / target) : 1;
+  let bucketSize = sourceData.length > target ? Math.ceil(sourceData.length / target) : 1;
+  if (range === '1d') bucketSize = 1; // never bucket intraday so ticks align with real times
+  
+  // Calculate indicators on RAW sourceData BEFORE bucketing for maximum accuracy
+  const rawEma20 = showEMA20 ? ema(sourceData.map((d: Candle) => d.c), 20) : [];
+  const rawVolMA = showVolMA ? sma(sourceData.map((d: Candle) => d.v), 20) : [];
+  const rawBollingerBands = showBollingerBands 
+    ? calculateBollingerBands(sourceData.map((d: Candle) => d.c)) 
+    : { upper: [], lower: [], middle: [] };
+  
   function bucketAggregate(src: Candle[], size: number) {
     if (size <= 1) return src;
     const out: Candle[] = [];
@@ -70,20 +81,70 @@ export default function AdvancedPriceChart({
     }
     return out;
   }
-  const baseData = bucketSize === 1 ? data : bucketAggregate(data, bucketSize);
+  
+  // Bucket indicators alongside the data (take every Nth value to match bucketing)
+  function bucketIndicator(values: (number | null)[], size: number): (number | null)[] {
+    if (size <= 1) return values;
+    const out: (number | null)[] = [];
+    for (let i = 0; i < values.length; i += size) {
+      out.push(values[i]); // Take the first value of each bucket
+    }
+    return out;
+  }
+  
+  const baseData = bucketSize === 1 ? sourceData : bucketAggregate(sourceData, bucketSize);
+  const bucketedEma20 = bucketSize === 1 ? rawEma20 : bucketIndicator(rawEma20, bucketSize);
+  const bucketedVolMA = bucketSize === 1 ? rawVolMA : bucketIndicator(rawVolMA, bucketSize);
+  const bucketedBollingerBands = bucketSize === 1 ? rawBollingerBands : {
+    upper: bucketIndicator(rawBollingerBands.upper, bucketSize),
+    lower: bucketIndicator(rawBollingerBands.lower, bucketSize),
+    middle: bucketIndicator(rawBollingerBands.middle, bucketSize),
+  };
+  
+  // Backend fetches extra candles for indicator calculation (20-50 depending on range)
+  // After bucketing, we hide proportionally fewer candles
+  const bufferPerRange: Record<RangeKey, number> = {
+    "1d": 50,   // Works perfectly
+    "1w": 50,   // Now much smaller since indicators pre-calculated
+    "1m": 50,   // Now much smaller since indicators pre-calculated
+    "3m": 50,   // Perfect already
+    "1y": 50,   // Works perfectly
+    "5y": 50,   // Works perfectly
+  };
+  const bufferCandles = Math.min(bufferPerRange[range], Math.floor(baseData.length * 0.2));
+  const displayData = baseData.slice(bufferCandles); // Hide first candles from user
+  
+  const [windowIdx, setWindowIdx] = React.useState<[number, number]>(() => [0, displayData.length - 1]);
+  // Reset window when displayData length changes (range change or new data)
+  useEffect(() => {
+    setWindowIdx([0, displayData.length - 1]);
+  }, [displayData.length]);
+  
   // Always show full range unless user zooms/pans (windowIdx acts as user override after first wheel/drag)
   const [wStart, wEnd] = windowIdx;
   const fullStart = 0;
-  const fullEnd = baseData.length - 1;
+  const fullEnd = displayData.length - 1;
   const effectiveStart =
-    wStart === 0 && wEnd === data.length - 1 ? fullStart : Math.max(0, Math.min(wStart, fullEnd));
-  const effectiveEnd = wStart === 0 && wEnd === data.length - 1 ? fullEnd : Math.min(wEnd, fullEnd);
-  const safeEnd = Math.min(effectiveEnd, baseData.length - 1);
+    wStart === 0 && wEnd === displayData.length - 1 ? fullStart : Math.max(0, Math.min(wStart, fullEnd));
+  const effectiveEnd = wStart === 0 && wEnd === displayData.length - 1 ? fullEnd : Math.min(wEnd, fullEnd);
+  const safeEnd = Math.min(effectiveEnd, displayData.length - 1);
   const safeStart = Math.max(0, Math.min(effectiveStart, safeEnd - 5));
-  const drawData = baseData.slice(safeStart, safeEnd + 1);
-  const closes = drawData.map((d) => d.c),
-    highs = drawData.map((d) => d.h),
-    lows = drawData.map((d) => d.l);
+  const drawData = displayData.slice(safeStart, safeEnd + 1);
+  
+  // Slice pre-calculated indicators to match drawData (offset by buffer + window)
+  const indicatorStart = bufferCandles + safeStart;
+  const indicatorEnd = bufferCandles + safeEnd + 1;
+  const ema20 = bucketedEma20.slice(indicatorStart, indicatorEnd);
+  const volMA = bucketedVolMA.slice(indicatorStart, indicatorEnd);
+  const bollingerBands = {
+    upper: bucketedBollingerBands.upper.slice(indicatorStart, indicatorEnd),
+    lower: bucketedBollingerBands.lower.slice(indicatorStart, indicatorEnd),
+    middle: bucketedBollingerBands.middle.slice(indicatorStart, indicatorEnd),
+  };
+  
+  const closes = drawData.map((d: Candle) => d.c),
+    highs = drawData.map((d: Candle) => d.h),
+    lows = drawData.map((d: Candle) => d.l);
   function quantile(arr: number[], q: number) {
     if (!arr.length) return 0;
     const sorted = [...arr].sort((a, b) => a - b);
@@ -119,26 +180,40 @@ export default function AdvancedPriceChart({
   const priceArea = priceH - padTop - padBottom;
   const up = closes[closes.length - 1] >= closes[0];
   const priceW = w - gutterRight - padLeft;
-  const linePts = drawData
-    .map((d, i) => {
-      const x = padLeft + (i / (drawData.length - 1)) * priceW;
-      const val = logScale
-        ? (Math.log10(d.c) - Math.log10(min)) / (Math.log10(max) - Math.log10(min || 1))
-        : (d.c - min) / span;
-      const y = padTop + (priceArea - val * priceArea);
-      return `${x},${y}`;
-    })
-    .join(" ");
+  
+  // Index-based horizontal scale (removes time gaps for continuous display)
+  const numCandles = drawData.length;
+  function xForIdx(idx: number) { return padLeft + (idx / Math.max(1, numCandles - 1)) * priceW; }
+  
+  // Store timestamps for labels
+  const drawTimes = drawData.map(d => new Date(d.t).getTime());
+  
+  // Adaptive candle width from data density
+  let candleWidth: number;
+  if (numCandles <= 2) {
+    candleWidth = (priceW / Math.max(1, numCandles)) * 0.6;
+  } else {
+    candleWidth = (priceW / numCandles) * 0.8;
+  }
+  if (candleWidth < 3) candleWidth = 3; if (candleWidth > 22) candleWidth = 22;
+  const linePts = drawData.map((d, idx) => {
+    const x = xForIdx(idx);
+    const val = logScale ? (Math.log10(d.c) - Math.log10(min)) / (Math.log10(max) - Math.log10(min || 1)) : (d.c - min) / span;
+    const y = padTop + (priceArea - val * priceArea);
+    return `${x},${y}`;
+  }).join(" ");
   const hoverPoint = hover != null ? drawData[hover] : null;
   function onMove(e: React.MouseEvent<SVGSVGElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    const ratio = Math.max(
-      0,
-      Math.min(1, (x - padLeft) / (rect.width - (gutterRight / w) * rect.width)),
-    );
-    const idx = Math.round(ratio * (drawData.length - 1));
-    setHover(idx);
+    
+    // Index-based hover: find nearest candle by x position
+    if (drawData.length === 0) return;
+    
+    const xRatio = Math.max(0, Math.min(1, (x - padLeft) / (rect.width - (gutterRight / w) * rect.width)));
+    const idx = Math.round(xRatio * (numCandles - 1));
+    
+    setHover(Math.max(0, Math.min(numCandles - 1, idx)));
   }
   const dragState = useRef<{ startX: number; startRange: [number, number] } | null>(null);
   function onWheel(e: React.WheelEvent<SVGSVGElement>) {
@@ -147,7 +222,7 @@ export default function AdvancedPriceChart({
     const delta = e.deltaY;
     const factor = delta > 0 ? 1.1 : 0.9;
     const currentLen = wEnd - wStart + 1;
-    const newLen = Math.max(20, Math.min(baseData.length, Math.round(currentLen * factor)));
+    const newLen = Math.max(20, Math.min(displayData.length, Math.round(currentLen * factor)));
     const rect = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
     const xRatio = (e.clientX - rect.left - padLeft) / (rect.width - gutterRight);
     const focusIdx = wStart + Math.round(currentLen * xRatio);
@@ -157,8 +232,8 @@ export default function AdvancedPriceChart({
       newStart = 0;
       newEnd = newLen - 1;
     }
-    if (newEnd > baseData.length - 1) {
-      newEnd = baseData.length - 1;
+    if (newEnd > displayData.length - 1) {
+      newEnd = displayData.length - 1;
       newStart = newEnd - newLen + 1;
     }
     setWindowIdx([newStart, newEnd]);
@@ -180,8 +255,8 @@ export default function AdvancedPriceChart({
       newStart = 0;
       newEnd = len - 1;
     }
-    if (newEnd > baseData.length - 1) {
-      newEnd = baseData.length - 1;
+    if (newEnd > displayData.length - 1) {
+      newEnd = displayData.length - 1;
       newStart = newEnd - len + 1;
     }
     setWindowIdx([newStart, newEnd]);
@@ -201,97 +276,46 @@ export default function AdvancedPriceChart({
     for (let v = first; v <= high; v += step) ticks.push(v);
     return ticks;
   }
-  // Time ticks
+  // Time ticks per explicit spec
   const timeTicks: Array<{ x: number; label: string }> = [];
   if (drawData.length > 1) {
-    const firstDate = new Date(drawData[0].t);
-    const lastDate = new Date(drawData[drawData.length - 1].t);
-    const times = drawData.map((d) => new Date(d.t).getTime());
-    function nearestIdx(ts: number) {
-      let lo = 0,
-        hi = times.length - 1;
-      while (lo < hi) {
-        const mid = (lo + hi) >> 1;
-        if (times[mid] < ts) lo = mid + 1;
-        else hi = mid;
-      }
-      return lo;
-    }
-    if (range === "1d") {
-      const start = new Date(firstDate);
-      start.setMinutes(start.getMinutes() < 30 ? 0 : 30, 0, 0);
-      start.setMinutes(start.getMinutes() - (start.getMinutes() % 30));
-      const cursor = new Date(start);
-      while (cursor <= lastDate) {
-        const idx = nearestIdx(cursor.getTime());
-        const ratio = idx / (drawData.length - 1);
-        timeTicks.push({
-          x: padLeft + ratio * priceW,
-          label:
-            cursor.getHours().toString().padStart(2, "0") +
-            ":" +
-            cursor.getMinutes().toString().padStart(2, "0"),
-        });
-        cursor.setMinutes(cursor.getMinutes() + 30);
-      }
-    } else if (range === "1w") {
-      const cursor = new Date(firstDate.getFullYear(), firstDate.getMonth(), firstDate.getDate());
-      while (cursor <= lastDate) {
-        const idx = nearestIdx(cursor.getTime());
-        const ratio = idx / (drawData.length - 1);
-        const label = cursor.toLocaleDateString(undefined, { weekday: "short" }).toUpperCase();
-        if (idx < drawData.length) timeTicks.push({ x: padLeft + ratio * priceW, label });
-        cursor.setDate(cursor.getDate() + 1);
-      }
-    } else if (range === "1m") {
-      const cursor = new Date(firstDate.getFullYear(), firstDate.getMonth(), firstDate.getDate());
-      while (cursor <= lastDate) {
-        if (cursor.getDay() === 1) {
-          const idx = nearestIdx(cursor.getTime());
-          const ratio = idx / (drawData.length - 1);
-          const label = cursor.getMonth() + 1 + "/" + cursor.getDate();
-          timeTicks.push({ x: padLeft + ratio * priceW, label });
+    if (range === '1d') {
+      // Show label every hour for cleaner display
+      const seen = new Set<string>();
+      drawData.forEach((c, idx) => {
+        const d = new Date(c.t);
+        const hh = d.getHours();
+        const mm = d.getMinutes();
+        // Show label every hour on the hour
+        if (mm === 0) {
+          const timeKey = `${hh}:00`;
+          if (!seen.has(timeKey)) {
+            seen.add(timeKey);
+            timeTicks.push({ 
+              x: xForIdx(idx), 
+              label: d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: false }) 
+            });
+          }
         }
-        cursor.setDate(cursor.getDate() + 1);
-      }
-    } else if (range === "1y") {
-      for (
-        let m = firstDate.getMonth();
-        m <= lastDate.getMonth() + 12 * (lastDate.getFullYear() - firstDate.getFullYear());
-        m++
-      ) {
-        const year = firstDate.getFullYear() + Math.floor(m / 12);
-        const month = m % 12;
-        const d = new Date(year, month, 1);
-        if (d < firstDate) continue;
-        if (d > lastDate) break;
-        const idx = nearestIdx(d.getTime());
-        const ratio = idx / (drawData.length - 1);
-        timeTicks.push({
-          x: padLeft + ratio * priceW,
-          label: d.toLocaleString(undefined, { month: "short" }).toUpperCase(),
-        });
-      }
-    } else if (range === "5y") {
-      for (let y = firstDate.getFullYear(); y <= lastDate.getFullYear(); y++) {
-        const d = new Date(y, 0, 1);
-        if (d < firstDate) continue;
-        if (d > lastDate) break;
-        const idx = nearestIdx(d.getTime());
-        const ratio = idx / (drawData.length - 1);
-        timeTicks.push({ x: padLeft + ratio * priceW, label: String(y) });
-      }
+      });
+    } else if (range === '1w') {
+      const seen = new Set<string>(); drawData.forEach((c, idx) => { const d = new Date(c.t); const k = d.toDateString(); if (!seen.has(k)) { seen.add(k); timeTicks.push({ x: xForIdx(idx), label: d.toLocaleDateString(undefined,{ weekday:'short'}).toUpperCase() }); } });
+    } else if (range === '1m') {
+      const seen = new Set<string>(); drawData.forEach((c, idx) => { const d = new Date(c.t); if (d.getDay() === 1) { const key = d.getFullYear()+"-"+d.getMonth()+"-"+d.getDate(); if (!seen.has(key)) { seen.add(key); timeTicks.push({ x: xForIdx(idx), label: (d.getMonth()+1)+"/"+d.getDate() }); } } });
+    } else if (range === '3m') {
+      let mondayCount = 0; drawData.forEach((c, idx) => { const d = new Date(c.t); if (d.getDay() === 1) { if (mondayCount % 3 === 0) timeTicks.push({ x: xForIdx(idx), label: (d.getMonth()+1)+"/"+d.getDate() }); mondayCount++; } });
+    } else if (range === '1y') {
+      const seenMonth = new Set<string>(); drawData.forEach((c, idx) => { const d = new Date(c.t); const mk = d.getFullYear()+"-"+d.getMonth(); if (!seenMonth.has(mk) && d.getDate() <= 7) { seenMonth.add(mk); timeTicks.push({ x: xForIdx(idx), label: d.toLocaleString(undefined,{ month:'short'}).toUpperCase() }); } });
+    } else if (range === '5y') {
+      const seenYear = new Set<number>(); drawData.forEach((c, idx) => { const d = new Date(c.t); if (!seenYear.has(d.getFullYear()) && d.getMonth() < 2) { seenYear.add(d.getFullYear()); timeTicks.push({ x: xForIdx(idx), label: String(d.getFullYear()) }); } });
     }
   }
-  const maxVol = Math.max(...drawData.map((d) => d.v), 1);
-  let candleWidth = (priceW / drawData.length) * 0.8;
-  if (candleWidth < 5) candleWidth = 5;
-  if (candleWidth > 18) candleWidth = 18;
+  const maxVol = Math.max(...drawData.map((d: Candle) => d.v), 1);
   const magnitude = Math.abs(max);
   const decimals = magnitude >= 500 ? 0 : magnitude >= 100 ? 1 : 2;
   function sma(src: number[], period: number) {
     if (src.length < period) return [];
-    const out: number[] = [];
+    const out: (number | null)[] = new Array(period - 1).fill(null); // Pad beginning with nulls
     let sum = 0;
     for (let i = 0; i < src.length; i++) {
       sum += src[i];
@@ -300,24 +324,48 @@ export default function AdvancedPriceChart({
     }
     return out;
   }
-  const sma20 = showSMA20
-    ? sma(
-        drawData.map((d) => d.c),
-        20,
-      )
-    : [];
-  const sma50 = showSMA50
-    ? sma(
-        drawData.map((d) => d.c),
-        50,
-      )
-    : [];
-  const volMA = showVolMA
-    ? sma(
-        drawData.map((d) => d.v),
-        20,
-      )
-    : [];
+
+  function ema(src: number[], period: number): (number | null)[] {
+    if (src.length < period) return [];
+    const k = 2 / (period + 1);
+    const out: (number | null)[] = new Array(period - 1).fill(null); // Pad beginning with nulls
+    
+    // Start with SMA for first value
+    let sum = 0;
+    for (let i = 0; i < period; i++) {
+      sum += src[i];
+    }
+    out.push(sum / period);
+    
+    // Then use EMA formula
+    for (let i = period; i < src.length; i++) {
+      out.push(src[i] * k + (out[out.length - 1] as number) * (1 - k));
+    }
+    
+    return out;
+  }
+
+  function calculateBollingerBands(closes: number[], period: number = 20, stdDevMultiplier: number = 2) {
+    if (closes.length < period) return { upper: [], lower: [], middle: [] };
+    
+    const middle: (number | null)[] = new Array(period - 1).fill(null);
+    const upper: (number | null)[] = new Array(period - 1).fill(null);
+    const lower: (number | null)[] = new Array(period - 1).fill(null);
+    
+    for (let i = period - 1; i < closes.length; i++) {
+      const slice = closes.slice(i - period + 1, i + 1);
+      const avg = slice.reduce((sum, val) => sum + val, 0) / period;
+      const variance = slice.reduce((sum, val) => sum + Math.pow(val - avg, 2), 0) / period;
+      const stdDev = Math.sqrt(variance);
+      
+      middle.push(avg);
+      upper.push(avg + stdDevMultiplier * stdDev);
+      lower.push(avg - stdDevMultiplier * stdDev);
+    }
+    
+    return { upper, lower, middle };
+  }
+  
   return (
     <div style={{ position: "absolute", inset: 0, fontSize: 11 }}>
       <svg
@@ -352,7 +400,7 @@ export default function AdvancedPriceChart({
               <text
                 x={padLeft + priceW + LayoutConfig.AXIS_Y_LABEL_X_OFFSET}
                 y={y + LayoutConfig.AXIS_Y_FONT_SIZE / 3}
-                fill={theme === "light" ? "#656d76" : "#9aa0a6"}
+                fill={theme === "light" ? "#000000" : "#ffffff"}
                 fontSize={LayoutConfig.AXIS_Y_FONT_SIZE}
               >
                 {t.toFixed(decimals)}
@@ -360,6 +408,92 @@ export default function AdvancedPriceChart({
             </g>
           );
         })}
+
+        {/* Vertical grid lines (render before chart data so they appear behind) */}
+        {timeTicks.map((t, i) => (
+          <line
+            key={"xtick-" + i}
+            x1={t.x}
+            x2={t.x}
+            y1={0}
+            y2={hVisual}
+            stroke={theme === "light" ? "#d0d7de" : "#30363d"}
+            strokeWidth={1}
+          />
+        ))}
+
+        {/* Bollinger Bands */}
+        {showBollingerBands && bollingerBands.upper.length > 0 && (
+          <>
+            {/* Fill area */}
+            <polygon
+              points={(() => {
+                const points: string[] = [];
+                // Upper band
+                for (let i = 0; i < bollingerBands.upper.length; i++) {
+                  const upperVal = bollingerBands.upper[i];
+                  if (upperVal === null) continue;
+                  const x = xForIdx(i);
+                  const val = (upperVal - min) / span;
+                  const y = padTop + (priceArea - val * priceArea);
+                  if (isFinite(x) && isFinite(y)) {
+                    points.push(`${x},${y}`);
+                  }
+                }
+                // Lower band (reversed)
+                for (let i = bollingerBands.lower.length - 1; i >= 0; i--) {
+                  const lowerVal = bollingerBands.lower[i];
+                  if (lowerVal === null) continue;
+                  const x = xForIdx(i);
+                  const val = (lowerVal - min) / span;
+                  const y = padTop + (priceArea - val * priceArea);
+                  if (isFinite(x) && isFinite(y)) {
+                    points.push(`${x},${y}`);
+                  }
+                }
+                return points.join(" ");
+              })()}
+              fill="rgba(135, 206, 235, 0.15)"
+              stroke="none"
+            />
+            
+            {/* Upper band outline */}
+            <polyline
+              points={bollingerBands.upper
+                .map((v, i) => {
+                  if (v === null) return null;
+                  const x = xForIdx(i);
+                  const val = (v - min) / span;
+                  const y = padTop + (priceArea - val * priceArea);
+                  return `${x},${y}`;
+                })
+                .filter(p => p !== null)
+                .join(" ")}
+              fill="none"
+              stroke="rgba(135, 206, 235, 0.8)"
+              strokeWidth={1}
+              vectorEffect="non-scaling-stroke"
+            />
+            
+            {/* Lower band outline */}
+            <polyline
+              points={bollingerBands.lower
+                .map((v, i) => {
+                  if (v === null) return null;
+                  const x = xForIdx(i);
+                  const val = (v - min) / span;
+                  const y = padTop + (priceArea - val * priceArea);
+                  return `${x},${y}`;
+                })
+                .filter(p => p !== null)
+                .join(" ")}
+              fill="none"
+              stroke="rgba(135, 206, 235, 0.8)"
+              strokeWidth={1}
+              vectorEffect="non-scaling-stroke"
+            />
+          </>
+        )}
         {mode === "line" && (
           <polyline
             points={linePts}
@@ -370,8 +504,9 @@ export default function AdvancedPriceChart({
           />
         )}
         {mode === "candles" &&
-          drawData.map((d, i) => {
-            const x = padLeft + (i / drawData.length) * priceW + candleWidth * 0.05;
+          drawData.map((d: Candle, idx: number) => {
+            const centerX = xForIdx(idx);
+            const x = centerX - candleWidth / 2;
             const valOpen = logScale
               ? (Math.log10(d.o) - Math.log10(min)) / (Math.log10(max) - Math.log10(min || 1))
               : (d.o - min) / span;
@@ -417,50 +552,51 @@ export default function AdvancedPriceChart({
               </g>
             );
           })}
-        {showSMA20 && sma20.length && (
+
+        {/* EMA 20 */}
+        {showEMA20 && ema20.length && (
           <polyline
-            points={sma20
+            points={ema20
               .map((v, i) => {
-                const idx = i + (drawData.length - sma20.length);
-                const x = padLeft + (idx / (drawData.length - 1)) * priceW;
+                if (v === null) return null;
+                const x = xForIdx(i);
                 const val = logScale
                   ? (Math.log10(v) - Math.log10(min)) / (Math.log10(max) - Math.log10(min || 1))
                   : (v - min) / span;
                 const y = 8 + (priceArea - val * priceArea);
                 return `${x},${y}`;
               })
+              .filter(p => p !== null)
               .join(" ")}
             fill="none"
-            stroke="#e0b341"
+            stroke="#ff9500"
             strokeWidth={1.4}
             vectorEffect="non-scaling-stroke"
           />
         )}
-        {showSMA50 && sma50.length && (
-          <polyline
-            points={sma50
-              .map((v, i) => {
-                const idx = i + (drawData.length - sma50.length);
-                const x = padLeft + (idx / (drawData.length - 1)) * priceW;
-                const val = logScale
-                  ? (Math.log10(v) - Math.log10(min)) / (Math.log10(max) - Math.log10(min || 1))
-                  : (v - min) / span;
-                const y = 8 + (priceArea - val * priceArea);
-                return `${x},${y}`;
-              })
-              .join(" ")}
-            fill="none"
-            stroke="#b65bff"
-            strokeWidth={1.2}
-            vectorEffect="non-scaling-stroke"
-          />
-        )}
-        {drawData.map((d, i) => {
-          const x = padLeft + (i / drawData.length) * priceW + candleWidth * 0.05;
+
+        {drawData.map((d, idx) => {
+          const centerX = xForIdx(idx);
+          const x = centerX - candleWidth / 2;
           const volRatio = d.v / maxVol;
-          const barH = volRatio * (volH - 16);
+          let barH = volRatio * (volH - 16);
+          
+          // Minimum bar height for visibility (especially for low after-hours volume)
+          const minBarHeight = 2;
+          if (barH > 0 && barH < minBarHeight) barH = minBarHeight;
+          
           const y = priceH + (volH - barH);
           const rising = d.c >= d.o;
+          
+          // Check if this is extended hours (before 9:30 or after 16:00 ET)
+          const candleDate = new Date(d.t);
+          const hour = candleDate.getHours();
+          const minute = candleDate.getMinutes();
+          const timeInMinutes = hour * 60 + minute;
+          const marketOpen = 9 * 60 + 30; // 9:30 AM
+          const marketClose = 16 * 60; // 4:00 PM
+          const isExtendedHours = timeInMinutes < marketOpen || timeInMinutes >= marketClose;
+          
           return (
             <rect
               key={d.t + ":vol"}
@@ -469,7 +605,7 @@ export default function AdvancedPriceChart({
               width={candleWidth}
               height={barH}
               fill={rising ? "var(--color-success)" : "var(--color-danger)"}
-              opacity={0.35}
+              opacity={isExtendedHours ? 0.2 : 0.35}
             />
           );
         })}
@@ -477,13 +613,14 @@ export default function AdvancedPriceChart({
           <polyline
             points={volMA
               .map((v, i) => {
-                const idx = i + (drawData.length - volMA.length);
-                const x = padLeft + (idx / (drawData.length - 1)) * priceW + candleWidth / 2;
+                if (v === null) return null;
+                const x = xForIdx(i);
                 const ratio = v / maxVol;
                 const barH = ratio * (volH - 16);
                 const y = priceH + (volH - barH);
                 return `${x},${y}`;
               })
+              .filter(p => p !== null)
               .join(" ")}
             fill="none"
             stroke="#58a6ff"
@@ -491,20 +628,9 @@ export default function AdvancedPriceChart({
             vectorEffect="non-scaling-stroke"
           />
         )}
-        {timeTicks.map((t, i) => (
-          <line
-            key={"xtick-" + i}
-            x1={t.x}
-            x2={t.x}
-            y1={0}
-            y2={hVisual}
-            stroke={theme === "light" ? "#d0d7de" : "#30363d"}
-            strokeWidth={1}
-          />
-        ))}
         {hoverPoint &&
           (() => {
-            const x = padLeft + (hover! / (drawData.length - 1)) * priceW;
+            const x = xForIdx(hover!);
             const y = 8 + (priceArea - ((hoverPoint.c - min) / span) * priceArea);
             return (
               <g>
@@ -541,6 +667,12 @@ export default function AdvancedPriceChart({
           (() => {
             const last = drawData[drawData.length - 1];
             const y = 8 + (priceArea - ((last.c - min) / span) * priceArea);
+            const isUp = last.c >= closes[0];
+            // Brighter, higher contrast colors for last price label
+            const brightGreen = "#00ff41"; // Bright neon green
+            const brightRed = "#ff3366"; // Bright red
+            const color = isUp ? brightGreen : brightRed;
+            
             return (
               <g>
                 <line
@@ -548,7 +680,7 @@ export default function AdvancedPriceChart({
                   x2={padLeft + priceW}
                   y1={y}
                   y2={y}
-                  stroke={last.c >= closes[0] ? "var(--color-success)" : "var(--color-danger)"}
+                  stroke={color}
                   strokeDasharray="2 4"
                   strokeWidth={1}
                 />
@@ -557,16 +689,18 @@ export default function AdvancedPriceChart({
                   y={y - LayoutConfig.LAST_PRICE_LABEL_HEIGHT / 2}
                   width={LayoutConfig.LAST_PRICE_LABEL_WIDTH}
                   height={LayoutConfig.LAST_PRICE_LABEL_HEIGHT}
-                  fill={theme === "light" ? "#f6f8fa" : "#1d2630"}
-                  stroke={theme === "light" ? "#d0d7de" : "#30363d"}
+                  fill={isUp 
+                    ? (theme === "light" ? "#e6fff0" : "#002211") 
+                    : (theme === "light" ? "#ffe6ee" : "#2d0011")}
+                  stroke={color}
                   rx={3}
                 />
                 <text
                   x={padLeft + priceW + 4 + LayoutConfig.LAST_PRICE_LABEL_WIDTH / 2}
-                  y={y + LayoutConfig.AXIS_Y_FONT_SIZE / 3}
+                  y={y + LayoutConfig.LAST_PRICE_LABEL_FONT_SIZE / 3}
                   textAnchor="middle"
-                  fill={last.c >= closes[0] ? "var(--color-success)" : "var(--color-danger)"}
-                  fontSize={LayoutConfig.AXIS_Y_FONT_SIZE + 2}
+                  fill={color}
+                  fontSize={LayoutConfig.LAST_PRICE_LABEL_FONT_SIZE}
                   fontWeight={600}
                 >
                   {last.c.toFixed(decimals)}
@@ -574,6 +708,110 @@ export default function AdvancedPriceChart({
               </g>
             );
           })()}
+        
+        {/* Indicator labels with smart overlap avoidance */}
+        {(() => {
+          const labels: Array<{ y: number; value: number; color: string; bgColor: string; stroke: string }> = [];
+          
+          // Main price position
+          const lastPrice = drawData[drawData.length - 1]?.c || 0;
+          const priceY = 8 + (priceArea - ((lastPrice - min) / span) * priceArea);
+          
+          // EMA20
+          if (showEMA20 && ema20.length > 0) {
+            const lastEma = ema20[ema20.length - 1];
+            if (lastEma !== null) {
+              labels.push({
+                y: 8 + (priceArea - ((lastEma - min) / span) * priceArea),
+                value: lastEma,
+                color: "#ff9500",
+                bgColor: theme === "light" ? "#fff5e6" : "#2d2400",
+                stroke: "#ff9500",
+              });
+            }
+          }
+          
+          // Bollinger Bands Upper
+          if (showBollingerBands && bollingerBands.upper.length > 0) {
+            const lastUpper = bollingerBands.upper[bollingerBands.upper.length - 1];
+            if (lastUpper !== null) {
+              labels.push({
+                y: 8 + (priceArea - ((lastUpper - min) / span) * priceArea),
+                value: lastUpper,
+                color: "rgba(135, 206, 235, 1)",
+                bgColor: theme === "light" ? "#e6f7ff" : "#001a2d",
+                stroke: "rgba(135, 206, 235, 0.8)",
+              });
+            }
+          }
+          
+          // Bollinger Bands Lower
+          if (showBollingerBands && bollingerBands.lower.length > 0) {
+            const lastLower = bollingerBands.lower[bollingerBands.lower.length - 1];
+            if (lastLower !== null) {
+              labels.push({
+                y: 8 + (priceArea - ((lastLower - min) / span) * priceArea),
+                value: lastLower,
+                color: "rgba(135, 206, 235, 1)",
+                bgColor: theme === "light" ? "#e6f7ff" : "#001a2d",
+                stroke: "rgba(135, 206, 235, 0.8)",
+              });
+            }
+          }
+          
+          // Adjust positions to avoid overlaps
+          const minGap = LayoutConfig.INDICATOR_LABEL_HEIGHT + 2;
+          const adjustedLabels = labels.map((label) => {
+            let adjustedY = label.y;
+            
+            // Check overlap with main price label
+            if (Math.abs(adjustedY - priceY) < minGap) {
+              // Move above or below based on which side has more space
+              if (adjustedY < priceY) {
+                // Label is above price, move it further up
+                adjustedY = priceY - minGap;
+              } else {
+                // Label is below price, move it further down
+                adjustedY = priceY + minGap;
+              }
+            }
+            
+            return { ...label, y: adjustedY };
+          });
+          
+          // Sort by Y position and adjust for overlaps between indicators
+          adjustedLabels.sort((a, b) => a.y - b.y);
+          for (let i = 1; i < adjustedLabels.length; i++) {
+            if (adjustedLabels[i].y - adjustedLabels[i - 1].y < minGap) {
+              adjustedLabels[i].y = adjustedLabels[i - 1].y + minGap;
+            }
+          }
+          
+          return adjustedLabels.map((label, idx) => (
+            <g key={`indicator-label-${idx}`}>
+              <rect
+                x={padLeft + priceW + 4}
+                y={label.y - LayoutConfig.INDICATOR_LABEL_HEIGHT / 2}
+                width={LayoutConfig.INDICATOR_LABEL_WIDTH}
+                height={LayoutConfig.INDICATOR_LABEL_HEIGHT}
+                fill={label.bgColor}
+                stroke={label.stroke}
+                rx={2}
+              />
+              <text
+                x={padLeft + priceW + 4 + LayoutConfig.INDICATOR_LABEL_WIDTH / 2}
+                y={label.y + LayoutConfig.INDICATOR_LABEL_FONT_SIZE / 3}
+                textAnchor="middle"
+                fill={label.color}
+                fontSize={LayoutConfig.INDICATOR_LABEL_FONT_SIZE}
+                fontWeight={600}
+              >
+                {label.value.toFixed(decimals)}
+              </text>
+            </g>
+          ));
+        })()}
+        
         {timeTicks.map((t, i) => (
           <text
             key={"xlabel-" + i}
@@ -581,34 +819,64 @@ export default function AdvancedPriceChart({
             y={h - 6}
             textAnchor="middle"
             fontSize={LayoutConfig.AXIS_X_FONT_SIZE}
-            fill={theme === "light" ? "#656d76" : "#888"}
+            fill={theme === "light" ? "#000000" : "#ffffff"}
           >
             {t.label}
           </text>
         ))}
       </svg>
-      {hoverPoint && (
-        <div
-          style={{
-            position: "absolute",
-            left: `calc(${(hover! / (drawData.length - 1)) * 100}% - 40px)`,
-            top: 8,
-            background: theme === "light" ? "rgba(255,255,255,0.95)" : "rgba(0,0,0,0.78)",
-            padding: "6px 8px",
-            borderRadius: 4,
-            pointerEvents: "none",
-            border: theme === "light" ? "1px solid #d0d7de" : "1px solid #30363d",
-            whiteSpace: "nowrap",
-            backdropFilter: "blur(2px)",
-            color: theme === "light" ? "#24292f" : "#e6edf3",
-          }}
-        >
-          <div style={{ fontSize: 11, opacity: 0.7 }}>
-            {new Date(hoverPoint.t).toLocaleString()}
+      {hoverPoint && (() => {
+        const hoverX = xForIdx(hover!);
+        const hoverXPercent = ((hoverX - padLeft) / priceW) * 100;
+        
+        // Simple boundary check: if near edges, adjust positioning
+        // Near right edge (> 85%) - anchor to right of hover point
+        // Near left edge (< 15%) - anchor to left of hover point
+        // Otherwise center on hover point
+        
+        let leftPos: string | undefined;
+        let rightPos: string | undefined;
+        let transform: string;
+        
+        if (hoverXPercent > 85) {
+          // Near right edge - tooltip opens to the left
+          leftPos = `${hoverXPercent}%`;
+          transform = "translateX(-100%)";
+        } else if (hoverXPercent < 15) {
+          // Near left edge - tooltip opens to the right
+          leftPos = `${hoverXPercent}%`;
+          transform = "translateX(0)";
+        } else {
+          // Center on hover point (default)
+          leftPos = `${hoverXPercent}%`;
+          transform = "translateX(-50%)";
+        }
+        
+        return (
+          <div
+            style={{
+              position: "absolute",
+              left: leftPos,
+              right: rightPos,
+              top: 8,
+              background: theme === "light" ? "rgba(255,255,255,0.95)" : "rgba(0,0,0,0.78)",
+              padding: "6px 8px",
+              borderRadius: 4,
+              pointerEvents: "none",
+              border: theme === "light" ? "1px solid #d0d7de" : "1px solid #30363d",
+              whiteSpace: "nowrap",
+              backdropFilter: "blur(2px)",
+              color: theme === "light" ? "#24292f" : "#e6edf3",
+              transform,
+            }}
+          >
+            <div style={{ fontSize: 11, opacity: 0.7 }}>
+              {new Date(hoverPoint.t).toLocaleString()}
+            </div>
+            <div style={{ fontWeight: 600 }}>{hoverPoint.c.toFixed(2)}</div>
           </div>
-          <div style={{ fontWeight: 600 }}>{hoverPoint.c.toFixed(2)}</div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
