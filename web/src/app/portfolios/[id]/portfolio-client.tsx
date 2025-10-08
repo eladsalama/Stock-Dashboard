@@ -54,6 +54,7 @@ export default function PortfolioClient({
   const [newRow, setNewRow] = useState<Enriched | null>(null);
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [editingAll, setEditingAll] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const { push } = useToast();
@@ -93,7 +94,7 @@ export default function PortfolioClient({
 
   // Structural positions polling
   useEffect(() => {
-    if (newRow) return;
+    if (newRow || editingAll) return;
     let t: ReturnType<typeof setTimeout> | undefined;
     let stop = false;
     async function loop() {
@@ -111,7 +112,7 @@ export default function PortfolioClient({
       stop = true;
       if (t) clearTimeout(t);
     };
-  }, [id, newRow]);
+  }, [id, newRow, editingAll]);
 
   // Quotes polling
   useEffect(() => {
@@ -248,6 +249,32 @@ export default function PortfolioClient({
     setPositions((ps) =>
       ps.map((p) => (p.id === pid ? { ...p, _editing: true } : { ...p, _editing: false })),
     );
+  }
+  function startEditAll() {
+    setEditingAll(true);
+    setPositions((ps) => ps.map((p) => ({ ...p, _editing: true })));
+  }
+  function cancelEditAll() {
+    setEditingAll(false);
+    setPositions((ps) => ps.map((p) => ({ ...p, _editing: false })));
+  }
+  async function saveEditAll() {
+    const editedPositions = positions.filter((p) => p._editing);
+    try {
+      await Promise.all(
+        editedPositions.map((p) =>
+          api.updatePosition(p.id, {
+            quantity: Number(p.quantity),
+            avgCost: Number(p.avgCost),
+          }),
+        ),
+      );
+    } catch {
+      push({ message: "Failed to save some positions", type: "error" });
+    } finally {
+      setEditingAll(false);
+      setPositions((ps) => ps.map((p) => ({ ...p, _editing: false })));
+    }
   }
   function editField(pid: string, field: "quantity" | "avgCost", value: number) {
     setPositions((ps) => ps.map((p) => (p.id === pid ? { ...p, [field]: value } : p)));
@@ -406,6 +433,36 @@ export default function PortfolioClient({
         title="Positions"
         actions={
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            {!editingAll ? (
+              <button
+                className="mini-btn"
+                onClick={startEditAll}
+                title="Edit All Positions (Qty & Avg Cost)"
+                disabled={positions.length === 0}
+                style={{ opacity: positions.length === 0 ? 0.4 : 1 }}
+              >
+                ✎
+              </button>
+            ) : (
+              <>
+                <button
+                  className="mini-btn"
+                  onClick={saveEditAll}
+                  title="Save All Changes"
+                  style={{ color: "#3fb950" }}
+                >
+                  ✓
+                </button>
+                <button
+                  className="mini-btn"
+                  onClick={cancelEditAll}
+                  title="Cancel All Changes"
+                  style={{ color: "#f85149" }}
+                >
+                  ✕
+                </button>
+              </>
+            )}
             <button className="mini-btn" onClick={startNew} title="Add Position">
               ＋
             </button>
@@ -461,11 +518,11 @@ export default function PortfolioClient({
                         />
                       ) : editing ? (
                         <input
-                          autoFocus
+                          autoFocus={!editingAll}
                           type="number"
                           value={r.quantity}
                           onChange={(e) => editField(r.id, "quantity", Number(e.target.value))}
-                          onBlur={() => saveEdit(r.id)}
+                          onBlur={editingAll ? undefined : () => saveEdit(r.id)}
                         />
                       ) : (
                         <span onDoubleClick={() => enterEdit(r.id)} style={{ cursor: "pointer" }}>
@@ -489,7 +546,7 @@ export default function PortfolioClient({
                           step="0.01"
                           value={r.avgCost}
                           onChange={(e) => editField(r.id, "avgCost", Number(e.target.value))}
-                          onBlur={() => saveEdit(r.id)}
+                          onBlur={editingAll ? undefined : () => saveEdit(r.id)}
                         />
                       ) : (
                         <span onDoubleClick={() => enterEdit(r.id)} style={{ cursor: "pointer" }}>
@@ -645,8 +702,8 @@ function merge(next: Position[], prev: Enriched[]): Enriched[] {
     const old = prevMap.get(p.id);
     if (!old) return p;
     if (old.symbol === p.symbol) {
-      const { price, previousClose, marketValue, pl, dayChange, dayChangePct, asOf, error } = old;
-      return { ...p, price, previousClose, marketValue, pl, dayChange, dayChangePct, asOf, error };
+      const { price, previousClose, marketValue, pl, dayChange, dayChangePct, asOf, error, _editing } = old;
+      return { ...p, price, previousClose, marketValue, pl, dayChange, dayChangePct, asOf, error, _editing };
     }
     return p;
   });

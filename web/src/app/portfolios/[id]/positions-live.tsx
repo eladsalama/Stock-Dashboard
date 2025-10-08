@@ -394,13 +394,24 @@ const PositionsLive = React.forwardRef<PositionsLiveHandle, Props>(function Posi
             </button>
           </div>
         ) : (
-          <button
-            className="mini-btn"
-            style={{ color: "#f85149" }}
-            onClick={() => removePosition(r.id)}
-          >
-            ✕
-          </button>
+          <div style={{ display: "flex", gap: 4 }}>
+            <button
+              className="mini-btn"
+              style={{ color: "var(--color-accent)" }}
+              onClick={() => enterEdit(r.id)}
+              title="Edit Qty & Avg Cost"
+            >
+              ✎
+            </button>
+            <button
+              className="mini-btn"
+              style={{ color: "#f85149" }}
+              onClick={() => removePosition(r.id)}
+              title="Delete position"
+            >
+              ✕
+            </button>
+          </div>
         ),
     },
   ];
