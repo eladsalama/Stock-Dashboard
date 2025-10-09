@@ -21,20 +21,18 @@ Stock Dashboard lets users:
 - Fetch real-time market data, live quotes and historical OHLCV with Redis-backed caching
 - View a responsive dashboard in Next.js
 
----
-
-## Architecture Overview
-<details>
-  <summary><b>Architecture Overview</b> (click to expand)</summary>
+<details open>
+  <summary><b>Architecture Overview</b> (click to collapse)</summary>
 
   <p align="center">
     <img
-      src="https://github.com/user-attachments/assets/7df10df8-bd8f-421f-8777-a924c9819479"
       alt="Stock Dashboard"
-      width="900"
+      src="https://github.com/user-attachments/assets/7df10df8-bd8f-421f-8777-a924c9819479"
+      width="700"
     />
   </p>
 </details>
+
 
 ## Quick Start
 
