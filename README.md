@@ -24,14 +24,17 @@ Stock Dashboard lets users:
 ---
 
 ## Architecture Overview
-<p align="center">
-  <img
-    alt="Stock Dashboard"
-    src="https://github.com/user-attachments/assets/7df10df8-bd8f-421f-8777-a924c9819479"
-    width="900"
-  />
-</p>
----
+<details>
+  <summary><b>Architecture Overview</b> (click to expand)</summary>
+
+  <p align="center">
+    <img
+      src="https://github.com/user-attachments/assets/7df10df8-bd8f-421f-8777-a924c9819479"
+      alt="Stock Dashboard"
+      width="900"
+    />
+  </p>
+</details>
 
 ## Quick Start
 
