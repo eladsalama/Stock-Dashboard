@@ -24,7 +24,7 @@ Stock Dashboard lets users:
 ---
 
 ## Architecture Overview
-
+<img width="2428" height="4184" alt="Stock Dashboard" src="https://github.com/user-attachments/assets/7df10df8-bd8f-421f-8777-a924c9819479" />
 
 ---
 
@@ -117,5 +117,5 @@ This project demonstrates:
 
 ---
 
-Project Structure 📁 detailed at Project_Structure.md
+Project Structure 📁 detailed at Project_Structure.md, 
 API Documentation 📝 detailed at API_Documentation.md
