@@ -12,7 +12,7 @@
 Built by [Elad Salama](https://www.linkedin.com/in/eladsalama) 
 
 ---
-https://github.com/user-attachments/assets/2b7df951-9b07-4525-b0a5-f8d85aeda521
+https://github.com/user-attachments/assets/0f379f46-066b-4bcc-bf35-172881592358
 
 ## Project Overview
 
