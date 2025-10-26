@@ -38,40 +38,68 @@ Stock Dashboard lets users:
 ## Quick Start
 
 ### **Prerequisites**
-- **Node.js** 18+ ([Download](https://nodejs.org/))
 - **Docker** & Docker Compose ([Download](https://www.docker.com/))
 - **Git** ([Download](https://git-scm.com/))
 
-### **1. Clone & Install**
+### **Run with Docker**
+
+The entire application stack runs with a single command:
+
 ```bash
 git clone https://github.com/eladsalama/Stock-Dashboard.git
 cd Stock-Dashboard
+docker-compose up -d
+```
+
+**The complete stack is now running**:
+- **Frontend (Next.js)** - http://localhost:3100
+- **API (Fastify)** - http://localhost:3000
+- **Worker** - Background CSV processor
+- **PostgreSQL** - localhost:5432
+- **Redis** - localhost:6379
+- **LocalStack (AWS)** - localhost:4566
+
+### **📦 Other Commands**
+```bash
+# View logs
+docker-compose logs -f
+
+# Stop all services
+docker-compose down
+
+# Rebuild after code changes
+docker-compose up --build -d
+```
+
+---
+
+### **Local Development Setup**
+
+For active development with hot-reload:
+
+**1. Install Dependencies**
+```bash
 npm install
 cd web && npm install && cd ..
 ```
 
-### **2. Start Infrastructure (PostgreSQL + Redis + LocalStack)**
+**2. Start Infrastructure**
 ```bash
-docker-compose up -d
-# Postgres: localhost:5432 | Redis: localhost:6379 | LocalStack: localhost:4566
+docker-compose up db redis localstack -d
 ```
 
-### **3. Database Setup**
+**3. Database Setup**
 ```bash
 npx prisma migrate deploy
 npx prisma db seed  # (Optional) Seed sample data
 ```
 
-### **4. Configure Environment**
-Create `.env` in the root directory:
-
+**4. Configure Environment**
 ```bash
-cp .env.example .env  # (Mac/Linux)
-Copy-Item .env.example .env  # (Windows PowerShell)
+cp .env.example .env
 ```
 
-
-### **5. Start Services**
+**5. Start Services**
 ```bash
 # Terminal 1: API Server
 npm run dev
@@ -83,7 +111,7 @@ npm run dev:worker
 cd web && npm run dev
 ```
 
-### **6. Access the Application**
+**Access Points:**
 - **Frontend:** http://localhost:3100
 - **API:** http://localhost:3000
 - **Health Check:** http://localhost:3000/healthz
