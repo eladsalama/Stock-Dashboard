@@ -12,6 +12,7 @@
 Built by [Elad Salama](https://www.linkedin.com/in/eladsalama) 
 
 ---
+https://github.com/user-attachments/assets/0f379f46-066b-4bcc-bf35-172881592358
 
 ## Project Overview
 
@@ -21,12 +22,18 @@ Stock Dashboard lets users:
 - Fetch real-time market data, live quotes and historical OHLCV with Redis-backed caching
 - View a responsive dashboard in Next.js
 
----
+<details open>
+  <summary><b>Architecture Overview</b> (click to collapse)</summary>
 
-## Architecture Overview
+  <p align="center">
+    <img
+      alt="Stock Dashboard"
+      src="https://github.com/user-attachments/assets/7df10df8-bd8f-421f-8777-a924c9819479"
+      width="700"
+    />
+  </p>
+</details>
 
-
----
 
 ## Quick Start
 
@@ -117,5 +124,5 @@ This project demonstrates:
 
 ---
 
-Project Structure 📁 detailed at Project_Structure.md
+Project Structure 📁 detailed at Project_Structure.md, 
 API Documentation 📝 detailed at API_Documentation.md
