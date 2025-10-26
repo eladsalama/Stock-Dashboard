@@ -2,7 +2,7 @@ services:
   api:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: docker/Dockerfile.api
     ports:
       - "3000:3000"
     environment:
@@ -30,7 +30,7 @@ services:
   web:
     build:
       context: ./web
-      dockerfile: ../Dockerfile.web
+      dockerfile: ../docker/Dockerfile.web
     ports:
       - "3100:3100"
     environment:
@@ -43,7 +43,7 @@ services:
   worker:
     build:
       context: .
-      dockerfile: Dockerfile.worker
+      dockerfile: docker/Dockerfile.worker
     environment:
       NODE_ENV: production
       LOG_LEVEL: info
