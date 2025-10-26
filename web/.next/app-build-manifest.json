@@ -16,11 +16,6 @@
       "static/chunks/main-app.js",
       "static/chunks/app/explore/page.js"
     ],
-    "/symbol/[symbol]/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/symbol/[symbol]/page.js"
-    ],
     "/portfolios/[id]/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",

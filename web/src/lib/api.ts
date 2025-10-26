@@ -320,13 +320,13 @@ export const api = {
     }>(`/v1/quotes/${encodeURIComponent(symbol)}`);
   },
   async stats(symbol: string) {
-    return request<import("../../../src/services/stats").SymbolStats>(
+    return request<import("./api-types").SymbolStats>(
       `/v1/quotes/${encodeURIComponent(symbol)}/stats`,
     );
   },
   async news(symbol: string) {
     return request<{
-      items: Array<import("../../../src/services/news").NewsItem>;
+      items: Array<import("./api-types").NewsItem>;
       cached?: boolean;
     }>(`/v1/quotes/${encodeURIComponent(symbol)}/news`);
   },

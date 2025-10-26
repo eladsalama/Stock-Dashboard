@@ -1,4 +1,67 @@
 services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      LOG_LEVEL: info
+      DATABASE_URL: postgres://postgres:postgres@db:5432/stockdash
+      REDIS_URL: redis://redis:6379
+      CORS_ORIGIN: http://localhost:3100
+      AWS_ENDPOINT_URL: http://localstack:4566
+      AWS_REGION: us-east-1
+      TRADES_BUCKET: trades
+      TRADES_QUEUE: trades
+      TRADES_DLQ: trades-dlq
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      localstack:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  web:
+    build:
+      context: ./web
+      dockerfile: ../Dockerfile.web
+    ports:
+      - "3100:3100"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+    depends_on:
+      - api
+    networks:
+      - app-network
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: info
+      DATABASE_URL: postgres://postgres:postgres@db:5432/stockdash
+      AWS_ENDPOINT_URL: http://localstack:4566
+      AWS_REGION: us-east-1
+      TRADES_BUCKET: trades
+      TRADES_QUEUE: trades
+      TRADES_DLQ: trades-dlq
+      TRADES_MAX_ATTEMPTS: 3
+    depends_on:
+      db:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    networks:
+      - app-network
+
   db:
     image: postgres:16
     environment:
@@ -9,11 +72,21 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
 
   redis:
     image: redis:7
     ports:
       - "6379:6379"
+    networks:
+      - app-network
+
   localstack:
     image: localstack/localstack:3
     environment:
@@ -21,5 +94,17 @@ services:
       - AWS_DEFAULT_REGION=us-east-1
     ports:
       - "4566:4566"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
 volumes:
   pgdata: {}
+
+networks:
+  app-network:
+    driver: bridge
